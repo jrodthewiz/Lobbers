@@ -1,49 +1,95 @@
-import { MapSchema, Schema, type } from "@colyseus/schema";
+import { defineTypes, MapSchema, Schema } from "@colyseus/schema";
 import { ROUND } from "../../shared/game/constants";
 import type { AmmoType, RoundState, Side } from "../../shared/game/types";
 
 export class PlayerState extends Schema {
-  @type("string") side: Side | "" = "";
-  @type("string") name = "Lobber";
-  @type("number") x = 0;
-  @type("number") y = 0;
-  @type("number") vx = 0;
-  @type("number") vy = 0;
-  @type("number") hp: number = ROUND.startingHp;
-  @type("number") aimX = 1;
-  @type("number") aimY = -0.35;
-  @type("string") selectedAmmo: AmmoType = "javelin";
-  @type("number") lastThrowDistance = 0;
-  @type("number") bestThrowDistance = 0;
-  @type("number") throwSeq = 0;
-  @type("boolean") charging = false;
-  @type("boolean") connected = true;
-  @type("boolean") ready = false;
-  @type("boolean") rematchRequested = false;
-  @type("boolean") isHost = false;
-  @type("boolean") isBot = false;
-  @type("boolean") grounded = true;
+  side: Side | "" = "";
+  name = "Lobber";
+  x = 0;
+  y = 0;
+  vx = 0;
+  vy = 0;
+  hp: number = ROUND.startingHp;
+  aimX = 1;
+  aimY = -0.35;
+  selectedAmmo: AmmoType = "javelin";
+  lastThrowDistance = 0;
+  bestThrowDistance = 0;
+  throwSeq = 0;
+  charging = false;
+  connected = true;
+  ready = false;
+  rematchRequested = false;
+  isHost = false;
+  isBot = false;
+  grounded = true;
 }
 
 export class ProjectileState extends Schema {
-  @type("string") id = "";
-  @type("string") ammoType: AmmoType = "javelin";
-  @type("string") ownerSessionId = "";
-  @type("number") x = 0;
-  @type("number") y = 0;
-  @type("number") vx = 0;
-  @type("number") vy = 0;
-  @type("number") radius = 0;
-  @type("boolean") alive = true;
+  id = "";
+  ammoType: AmmoType = "javelin";
+  ownerSessionId = "";
+  x = 0;
+  y = 0;
+  vx = 0;
+  vy = 0;
+  radius = 0;
+  alive = true;
 }
 
 export class LobbersState extends Schema {
-  @type({ map: PlayerState }) players = new MapSchema<PlayerState>();
-  @type({ map: ProjectileState }) projectiles = new MapSchema<ProjectileState>();
-  @type("string") roundState: RoundState = "waiting";
-  @type("string") winnerSide: Side | "" = "";
-  @type("number") serverTick = 0;
-  @type("string") code = "";
-  @type("string") hostName = "Host";
-  @type("number") countdownEndsAtMs = 0;
+  players = new MapSchema<PlayerState>();
+  projectiles = new MapSchema<ProjectileState>();
+  roundState: RoundState = "waiting";
+  winnerSide: Side | "" = "";
+  serverTick = 0;
+  code = "";
+  hostName = "Host";
+  countdownEndsAtMs = 0;
 }
+
+defineTypes(PlayerState, {
+  side: "string",
+  name: "string",
+  x: "number",
+  y: "number",
+  vx: "number",
+  vy: "number",
+  hp: "number",
+  aimX: "number",
+  aimY: "number",
+  selectedAmmo: "string",
+  lastThrowDistance: "number",
+  bestThrowDistance: "number",
+  throwSeq: "number",
+  charging: "boolean",
+  connected: "boolean",
+  ready: "boolean",
+  rematchRequested: "boolean",
+  isHost: "boolean",
+  isBot: "boolean",
+  grounded: "boolean",
+});
+
+defineTypes(ProjectileState, {
+  id: "string",
+  ammoType: "string",
+  ownerSessionId: "string",
+  x: "number",
+  y: "number",
+  vx: "number",
+  vy: "number",
+  radius: "number",
+  alive: "boolean",
+});
+
+defineTypes(LobbersState, {
+  players: { map: PlayerState },
+  projectiles: { map: ProjectileState },
+  roundState: "string",
+  winnerSide: "string",
+  serverTick: "number",
+  code: "string",
+  hostName: "string",
+  countdownEndsAtMs: "number",
+});

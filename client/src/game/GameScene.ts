@@ -7,7 +7,6 @@ import {
   buildLaunchVelocity,
   buildTankHitbox,
   normalize,
-  normalizeAimForSide,
   predictTrajectory,
   resolveChargeRatio,
   resolveShoulderPosition,
@@ -15,6 +14,7 @@ import {
 } from "../../../shared/game/math";
 import type { AmmoType, CourtFixture, Side, Vec2 } from "../../../shared/game/types";
 import { ProceduralBackground } from "./ProceduralBackground";
+import { resolvePointerAim } from "./aim";
 import {
   AMMO_FX_FRAMES,
   AMMO_SPRITE_FRAMES,
@@ -60,6 +60,12 @@ type ImpactFx = {
   strength: number;
   startedAtMs: number;
   sprites: Phaser.GameObjects.Image[];
+};
+
+type TankSpriteSet = {
+  shadow: Phaser.GameObjects.Image;
+  body: Phaser.GameObjects.Image;
+  pilot: Phaser.GameObjects.Image;
 };
 
 const COLORS = {
@@ -150,12 +156,15 @@ export class GameScene extends Phaser.Scene {
   private selectedAmmo: AmmoType = "javelin";
   private callbacks: GameSceneCallbacks | null = null;
   private pointerAim: Vec2 = { x: 1, y: -0.35 };
+  private aimDragStartWorld: Vec2 | null = null;
+  private aimDragCurrentWorld: Vec2 | null = null;
   private chargingStartedAtMs: number | null = null;
   private readonly lastThrowSeqBySessionId = new Map<string, number>();
   private readonly throwAnimationStartedAtBySessionId = new Map<string, number>();
   private readonly fixtureSpritesById = new Map<string, Phaser.GameObjects.Image>();
   private readonly projectileSpritesById = new Map<string, Phaser.GameObjects.Image>();
   private readonly projectileTrailSpritesById = new Map<string, Phaser.GameObjects.Image>();
+  private readonly tankSpritesBySessionId = new Map<string, TankSpriteSet>();
   private readonly lastProjectilesById = new Map<string, ProjectileView>();
   private readonly lastHpBySessionId = new Map<string, number>();
   private readonly impactFx: ImpactFx[] = [];
@@ -222,6 +231,8 @@ export class GameScene extends Phaser.Scene {
 
   private handlePointerDown(pointer: Phaser.Input.Pointer): void {
     if (!this.canCharge()) return;
+    this.aimDragStartWorld = this.resolvePointerWorld(pointer);
+    this.aimDragCurrentWorld = { ...this.aimDragStartWorld };
     this.updatePointerAim(pointer);
     this.chargingStartedAtMs = performance.now();
     this.callbacks?.chargeStart();
@@ -236,12 +247,16 @@ export class GameScene extends Phaser.Scene {
     this.updatePointerAim(pointer);
     const aim = this.pointerAim;
     this.chargingStartedAtMs = null;
+    this.aimDragStartWorld = null;
+    this.aimDragCurrentWorld = null;
     this.callbacks?.throwRelease(aim);
   }
 
   private cancelCharge(): void {
     if (this.chargingStartedAtMs === null) return;
     this.chargingStartedAtMs = null;
+    this.aimDragStartWorld = null;
+    this.aimDragCurrentWorld = null;
     this.callbacks?.chargeCancel();
   }
 
@@ -249,12 +264,21 @@ export class GameScene extends Phaser.Scene {
     const player = this.getLocalPlayer();
     if (!player) return;
     const shoulder = resolveShoulderPosition(player.x, player.y, player.side);
-    const raw = normalize(
-      pointer.worldX - shoulder.x,
-      pointer.worldY - shoulder.y,
-      { x: SIDE_SIGN[player.side], y: -0.35 },
-    );
-    this.pointerAim = normalizeAimForSide({ aimX: raw.x, aimY: raw.y }, player.side);
+    const pointerWorld = this.resolvePointerWorld(pointer);
+    this.aimDragCurrentWorld = pointerWorld;
+    this.pointerAim = resolvePointerAim({
+      pointer: pointerWorld,
+      shoulder,
+      side: player.side,
+      currentAim: this.pointerAim,
+      dragStart: this.aimDragStartWorld,
+      isCharging: this.chargingStartedAtMs !== null,
+    });
+  }
+
+  private resolvePointerWorld(pointer: Phaser.Input.Pointer): Vec2 {
+    const worldPoint = pointer.positionToCamera(this.cameras.main) as Phaser.Math.Vector2;
+    return { x: worldPoint.x, y: worldPoint.y };
   }
 
   private canCharge(): boolean {
@@ -375,13 +399,15 @@ export class GameScene extends Phaser.Scene {
   private pulseImpactCameraFx(ammoType: AmmoType, strength: number): void {
     const profile = AMMO_FX[ammoType];
     const rgb = rgbFromHex(profile.hot);
-    this.cameras.main.shake(90 + (strength * 70), 0.0022 * strength, true);
-    this.cameras.main.flash(70 + (strength * 36), rgb.r, rgb.g, rgb.b, true);
+    const duration = ammoType === "shotput" ? 130 : 90;
+    const shakeScale = ammoType === "shotput" ? 0.0031 : 0.0022;
+    this.cameras.main.shake(duration + (strength * 82), shakeScale * strength, true);
+    this.cameras.main.flash(86 + (strength * 48), rgb.r, rgb.g, rgb.b, true);
   }
 
   private resolveImpactStrength(ammoType: AmmoType, damageDetected: boolean): number {
-    const base = ammoType === "shotput" ? 1.15 : ammoType === "splitter" ? 0.92 : 0.72;
-    return base * (damageDetected ? 1.28 : 1);
+    const base = ammoType === "shotput" ? 1.45 : ammoType === "splitter" ? 1 : 0.82;
+    return base * (damageDetected ? 1.35 : 1);
   }
 
   private draw(): void {
@@ -495,9 +521,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawPlayers(): void {
+    const activeSessionIds = new Set<string>();
     for (const player of this.snapshot.players) {
+      activeSessionIds.add(player.sessionId);
       this.drawTank(player);
     }
+    this.destroyInactiveTankSprites(activeSessionIds);
   }
 
   private drawTank(player: PlayerView): void {
@@ -508,16 +537,18 @@ export class GameScene extends Phaser.Scene {
     const bodyY = player.y - WORLD.tankHeight;
     const bodyX = player.x - (WORLD.tankWidth / 2);
 
-    g.fillStyle(sideColor, player.connected ? 1 : 0.42);
-    g.fillRoundedRect(bodyX, bodyY, WORLD.tankWidth, WORLD.tankHeight, 8);
-    g.fillStyle(0x0f172a, 0.9);
-    g.fillCircle(bodyX + 20, player.y + 2, 9);
-    g.fillCircle(bodyX + WORLD.tankWidth - 20, player.y + 2, 9);
+    if (!this.syncTankSprites(player)) {
+      g.fillStyle(sideColor, player.connected ? 1 : 0.42);
+      g.fillRoundedRect(bodyX, bodyY, WORLD.tankWidth, WORLD.tankHeight, 8);
+      g.fillStyle(0x0f172a, 0.9);
+      g.fillCircle(bodyX + 20, player.y + 2, 9);
+      g.fillCircle(bodyX + WORLD.tankWidth - 20, player.y + 2, 9);
 
-    g.fillStyle(COLORS.worm, player.connected ? 1 : 0.45);
-    g.fillCircle(player.x, bodyY - 9, WORLD.pilotRadius);
-    g.fillStyle(lightColor, 1);
-    g.fillCircle(player.x + (SIDE_SIGN[player.side] * 4), bodyY - 12, 3);
+      g.fillStyle(COLORS.worm, player.connected ? 1 : 0.45);
+      g.fillCircle(player.x, bodyY - 9, WORLD.pilotRadius);
+      g.fillStyle(lightColor, 1);
+      g.fillCircle(player.x + (SIDE_SIGN[player.side] * 4), bodyY - 12, 3);
+    }
 
     const aim = this.resolvePlayerAim(player);
     const armPose = this.resolveArmPose(player, aim);
@@ -526,6 +557,81 @@ export class GameScene extends Phaser.Scene {
     if (player.hp <= 0) {
       g.lineStyle(3, 0xffffff, 0.7);
       g.strokeRect(hitbox.x, hitbox.y, hitbox.width, hitbox.height);
+    }
+  }
+
+  private syncTankSprites(player: PlayerView): boolean {
+    if (!this.hasAtlasFrame(SPRITES.tank.shadow)) return false;
+    const sideSprites = SPRITES.tank[player.side];
+    const treadIndex = Math.floor((performance.now() * 0.008) + (player.x * 0.05)) % sideSprites.treads.length;
+    const isLocallyCharging = player.sessionId === this.localSessionId && this.chargingStartedAtMs !== null;
+    const bodyFrame = player.hp <= 0
+      ? sideSprites.bodyDamaged
+      : (player.charging || isLocallyCharging ? sideSprites.treads[treadIndex] ?? sideSprites.bodyIdle : sideSprites.bodyIdle);
+    if (!this.hasAtlasFrame(bodyFrame) || !this.hasAtlasFrame(sideSprites.pilot)) return false;
+
+    const sprites = this.getTankSprites(player.sessionId, bodyFrame, sideSprites.pilot);
+    const alpha = player.connected ? 1 : 0.46;
+    const bodyScale = this.resolveFrameScale(bodyFrame, 112);
+    const shadowScale = this.resolveFrameScale(SPRITES.tank.shadow, 112);
+    const pilotScale = this.resolveFrameScale(sideSprites.pilot, 46);
+    const facingScaleX = player.side === "red" ? -bodyScale : bodyScale;
+    const pilotFacingScaleX = player.side === "red" ? -pilotScale : pilotScale;
+    const bob = Math.sin(performance.now() * 0.004 + player.x * 0.03) * (player.charging ? 1.4 : 0.45);
+    const bodyBottomY = player.y + 8 + bob;
+    const pilotBottomY = player.y - WORLD.tankHeight + 8 + (bob * 0.55);
+
+    sprites.shadow
+      .setTexture(SPRITE_ATLAS_KEY, SPRITES.tank.shadow)
+      .setPosition(player.x, player.y + 14)
+      .setScale(shadowScale, shadowScale * 0.9)
+      .setAlpha(alpha * 0.52)
+      .setVisible(true);
+    sprites.body
+      .setTexture(SPRITE_ATLAS_KEY, bodyFrame)
+      .setPosition(player.x, bodyBottomY)
+      .setScale(facingScaleX, bodyScale)
+      .setAlpha(alpha)
+      .setVisible(true);
+    sprites.pilot
+      .setTexture(SPRITE_ATLAS_KEY, sideSprites.pilot)
+      .setPosition(player.x, pilotBottomY)
+      .setScale(pilotFacingScaleX, pilotScale)
+      .setAlpha(alpha)
+      .setVisible(true);
+
+    return true;
+  }
+
+  private getTankSprites(sessionId: string, bodyFrame: string, pilotFrame: string): TankSpriteSet {
+    const existing = this.tankSpritesBySessionId.get(sessionId);
+    if (existing) return existing;
+    const sprites = {
+      shadow: this.add.image(0, 0, SPRITE_ATLAS_KEY, SPRITES.tank.shadow).setOrigin(0.5, 1).setDepth(16),
+      body: this.add.image(0, 0, SPRITE_ATLAS_KEY, bodyFrame).setOrigin(0.5, 1).setDepth(18),
+      pilot: this.add.image(0, 0, SPRITE_ATLAS_KEY, pilotFrame).setOrigin(0.5, 1).setDepth(19),
+    };
+    this.tankSpritesBySessionId.set(sessionId, sprites);
+    return sprites;
+  }
+
+  private hasAtlasFrame(frame: string): boolean {
+    if (!this.textures.exists(SPRITE_ATLAS_KEY)) return false;
+    return this.textures.getFrame(SPRITE_ATLAS_KEY, frame) !== null;
+  }
+
+  private resolveFrameScale(frame: string, targetWidth: number): number {
+    const atlasFrame = this.textures.getFrame(SPRITE_ATLAS_KEY, frame);
+    return targetWidth / Math.max(1, atlasFrame?.width ?? targetWidth);
+  }
+
+  private destroyInactiveTankSprites(activeSessionIds: Set<string>): void {
+    for (const [sessionId, sprites] of this.tankSpritesBySessionId.entries()) {
+      if (activeSessionIds.has(sessionId)) continue;
+      sprites.shadow.destroy();
+      sprites.body.destroy();
+      sprites.pilot.destroy();
+      this.tankSpritesBySessionId.delete(sessionId);
     }
   }
 
@@ -1050,11 +1156,11 @@ export class GameScene extends Phaser.Scene {
       const impact = this.impactFx[index];
       if (!impact) continue;
       const age = now - impact.startedAtMs;
-      const progress = clamp01(age / 620);
+      const progress = clamp01(age / (impact.ammoType === "shotput" ? 760 : 660));
       const inverse = 1 - progress;
       const profile = AMMO_FX[impact.ammoType];
       const ease = easeOutCubic(progress);
-      const baseScale = impact.ammoType === "shotput" ? 0.44 : impact.ammoType === "splitter" ? 0.34 : 0.28;
+      const baseScale = impact.ammoType === "shotput" ? 0.52 : impact.ammoType === "splitter" ? 0.36 : 0.3;
       const strength = impact.strength;
 
       if (progress >= 1) {
@@ -1064,21 +1170,21 @@ export class GameScene extends Phaser.Scene {
       }
 
       impact.sprites.forEach((sprite, spriteIndex) => {
-        const spriteScale = baseScale + (ease * strength * (impact.ammoType === "shotput" ? 0.55 : 0.42)) + (spriteIndex * 0.08);
+        const spriteScale = baseScale + (ease * strength * (impact.ammoType === "shotput" ? 0.72 : 0.46)) + (spriteIndex * 0.08);
         sprite
           .setPosition(
-            impact.x + (spriteIndex > 1 ? Math.cos((now * 0.012) + spriteIndex) * 18 * ease : 0),
-            impact.y + (spriteIndex > 1 ? Math.sin((now * 0.01) + spriteIndex) * 12 * ease : 0),
+            impact.x + (spriteIndex > 1 ? Math.cos((now * 0.012) + spriteIndex) * 24 * ease : 0),
+            impact.y + (spriteIndex > 1 ? Math.sin((now * 0.01) + spriteIndex) * 16 * ease : 0),
           )
           .setScale(spriteScale)
           .setRotation((now * 0.002 * (spriteIndex + 1)) + (spriteIndex * 0.7))
           .setAlpha(Math.max(0, inverse * (spriteIndex === 1 ? 0.5 : 0.84)));
       });
 
-      fx.lineStyle(3 + (impact.radius * 0.08), profile.hot, inverse * 0.52);
-      fx.strokeCircle(impact.x, impact.y, 18 + (ease * strength * (impact.radius * 4 + 64)));
-      fx.lineStyle(2, profile.glow, inverse * 0.32);
-      fx.strokeCircle(impact.x, impact.y, 8 + (ease * strength * (impact.radius * 3 + 34)));
+      fx.lineStyle(4 + (impact.radius * 0.1), profile.hot, inverse * 0.58);
+      fx.strokeCircle(impact.x, impact.y, 20 + (ease * strength * (impact.radius * 5 + 82)));
+      fx.lineStyle(2, profile.glow, inverse * 0.38);
+      fx.strokeCircle(impact.x, impact.y, 9 + (ease * strength * (impact.radius * 3.5 + 42)));
 
       if (impact.ammoType === "javelin") {
         fx.lineStyle(4, profile.spark, inverse * 0.46);
@@ -1087,10 +1193,25 @@ export class GameScene extends Phaser.Scene {
         fx.lineTo(impact.x + 44 + (ease * strength * 28), impact.y - 8);
         fx.strokePath();
       } else if (impact.ammoType === "shotput") {
-        g.lineStyle(3, 0xffffff, inverse * 0.24);
-        g.strokeCircle(impact.x, impact.y, 28 + (ease * strength * 78));
-        fx.fillStyle(profile.glow, inverse * 0.08);
-        fx.fillCircle(impact.x, impact.y, 34 + (ease * strength * 80));
+        g.lineStyle(4, 0xffffff, inverse * 0.3);
+        g.strokeCircle(impact.x, impact.y, 30 + (ease * strength * 110));
+        fx.lineStyle(6, profile.spark, inverse * 0.18);
+        fx.strokeCircle(impact.x, impact.y, 44 + (ease * strength * 150));
+        fx.fillStyle(profile.glow, inverse * 0.11);
+        fx.fillCircle(impact.x, impact.y, 38 + (ease * strength * 96));
+        for (let i = 0; i < 10; i += 1) {
+          const angle = (-Math.PI * 0.92) + ((Math.PI * 1.84 * i) / 9);
+          const distance = 30 + (ease * strength * (70 + (i % 3) * 18));
+          const sparkX = impact.x + (Math.cos(angle) * distance);
+          const sparkY = impact.y + (Math.sin(angle) * distance * 0.74);
+          fx.lineStyle(i % 2 === 0 ? 3 : 2, i % 2 === 0 ? profile.hot : profile.spark, inverse * 0.48);
+          fx.beginPath();
+          fx.moveTo(impact.x + (Math.cos(angle) * 16), impact.y + (Math.sin(angle) * 10));
+          fx.lineTo(sparkX, sparkY);
+          fx.strokePath();
+          fx.fillStyle(profile.shadow, inverse * 0.22);
+          fx.fillCircle(sparkX, sparkY + (ease * 12), 4.5 + (inverse * 3));
+        }
       } else {
         for (let i = 0; i < 7; i += 1) {
           const angle = (Math.PI * 2 * i) / 7;
@@ -1138,6 +1259,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (isCharging) {
+      this.drawAimPullGuide(hand, ratio);
       this.drawAimChargePreview(this.selectedAmmo, hand, this.pointerAim, ratio);
       g.lineStyle(5, colorForAmmo(this.selectedAmmo), 0.85);
       g.beginPath();
@@ -1170,6 +1292,25 @@ export class GameScene extends Phaser.Scene {
     fx.fillStyle(profile.hot, 0.24 + (chargeRatio * 0.36));
     fx.fillCircle(end.x, end.y, ammoType === "shotput" ? 10 + (chargeRatio * 11) : 6 + (chargeRatio * 8));
     this.drawEnergyParticles(ammoType, end.x, end.y, direction.x, direction.y, 14, 0.8 + chargeRatio, 0.82);
+  }
+
+  private drawAimPullGuide(hand: Vec2, chargeRatio: number): void {
+    if (!this.aimDragStartWorld || !this.aimDragCurrentWorld) return;
+    const pullDistance = Math.min(120, Math.hypot(
+      this.aimDragCurrentWorld.x - this.aimDragStartWorld.x,
+      this.aimDragCurrentWorld.y - this.aimDragStartWorld.y,
+    ));
+    const guideAlpha = 0.18 + (chargeRatio * 0.26);
+    const anchor = pointAlong(hand, this.pointerAim, -Math.max(24, pullDistance * 0.45));
+
+    const fx = this.fxGraphics;
+    fx.lineStyle(3, COLORS.preview, guideAlpha);
+    fx.beginPath();
+    fx.moveTo(anchor.x, anchor.y);
+    fx.lineTo(hand.x, hand.y);
+    fx.strokePath();
+    fx.fillStyle(COLORS.preview, guideAlpha + 0.08);
+    fx.fillCircle(anchor.x, anchor.y, 5 + (chargeRatio * 3));
   }
 
   private createFixtureSprites(): void {

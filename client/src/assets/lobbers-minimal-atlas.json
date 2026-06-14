@@ -120,10 +120,310 @@
         "h": 114
       }
     },
-    "ui/ammo-javelin": {
+    "tank/shadow": {
       "frame": {
         "x": 590,
         "y": 4,
+        "w": 105,
+        "h": 23
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 105,
+        "h": 23
+      },
+      "sourceSize": {
+        "w": 105,
+        "h": 23
+      }
+    },
+    "tank/blue/body-idle": {
+      "frame": {
+        "x": 699,
+        "y": 4,
+        "w": 115,
+        "h": 72
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 115,
+        "h": 72
+      },
+      "sourceSize": {
+        "w": 115,
+        "h": 72
+      }
+    },
+    "tank/blue/body-damaged": {
+      "frame": {
+        "x": 818,
+        "y": 4,
+        "w": 115,
+        "h": 72
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 115,
+        "h": 72
+      },
+      "sourceSize": {
+        "w": 115,
+        "h": 72
+      }
+    },
+    "tank/blue/tread-0": {
+      "frame": {
+        "x": 4,
+        "y": 129,
+        "w": 115,
+        "h": 72
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 115,
+        "h": 72
+      },
+      "sourceSize": {
+        "w": 115,
+        "h": 72
+      }
+    },
+    "tank/blue/tread-1": {
+      "frame": {
+        "x": 123,
+        "y": 129,
+        "w": 115,
+        "h": 72
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 115,
+        "h": 72
+      },
+      "sourceSize": {
+        "w": 115,
+        "h": 72
+      }
+    },
+    "tank/blue/tread-2": {
+      "frame": {
+        "x": 242,
+        "y": 129,
+        "w": 115,
+        "h": 72
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 115,
+        "h": 72
+      },
+      "sourceSize": {
+        "w": 115,
+        "h": 72
+      }
+    },
+    "tank/blue/tread-3": {
+      "frame": {
+        "x": 361,
+        "y": 129,
+        "w": 115,
+        "h": 72
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 115,
+        "h": 72
+      },
+      "sourceSize": {
+        "w": 115,
+        "h": 72
+      }
+    },
+    "tank/blue/pilot": {
+      "frame": {
+        "x": 480,
+        "y": 129,
+        "w": 47,
+        "h": 53
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 47,
+        "h": 53
+      },
+      "sourceSize": {
+        "w": 47,
+        "h": 53
+      }
+    },
+    "tank/red/body-idle": {
+      "frame": {
+        "x": 531,
+        "y": 129,
+        "w": 115,
+        "h": 72
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 115,
+        "h": 72
+      },
+      "sourceSize": {
+        "w": 115,
+        "h": 72
+      }
+    },
+    "tank/red/body-damaged": {
+      "frame": {
+        "x": 650,
+        "y": 129,
+        "w": 115,
+        "h": 72
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 115,
+        "h": 72
+      },
+      "sourceSize": {
+        "w": 115,
+        "h": 72
+      }
+    },
+    "tank/red/tread-0": {
+      "frame": {
+        "x": 769,
+        "y": 129,
+        "w": 115,
+        "h": 72
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 115,
+        "h": 72
+      },
+      "sourceSize": {
+        "w": 115,
+        "h": 72
+      }
+    },
+    "tank/red/tread-1": {
+      "frame": {
+        "x": 888,
+        "y": 129,
+        "w": 115,
+        "h": 72
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 115,
+        "h": 72
+      },
+      "sourceSize": {
+        "w": 115,
+        "h": 72
+      }
+    },
+    "tank/red/tread-2": {
+      "frame": {
+        "x": 4,
+        "y": 205,
+        "w": 115,
+        "h": 72
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 115,
+        "h": 72
+      },
+      "sourceSize": {
+        "w": 115,
+        "h": 72
+      }
+    },
+    "tank/red/tread-3": {
+      "frame": {
+        "x": 123,
+        "y": 205,
+        "w": 115,
+        "h": 72
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 115,
+        "h": 72
+      },
+      "sourceSize": {
+        "w": 115,
+        "h": 72
+      }
+    },
+    "tank/red/pilot": {
+      "frame": {
+        "x": 242,
+        "y": 205,
+        "w": 47,
+        "h": 53
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 47,
+        "h": 53
+      },
+      "sourceSize": {
+        "w": 47,
+        "h": 53
+      }
+    },
+    "ui/ammo-javelin": {
+      "frame": {
+        "x": 293,
+        "y": 205,
         "w": 114,
         "h": 121
       },
@@ -142,8 +442,8 @@
     },
     "ui/ammo-shotput": {
       "frame": {
-        "x": 708,
-        "y": 4,
+        "x": 411,
+        "y": 205,
         "w": 113,
         "h": 111
       },
@@ -162,8 +462,8 @@
     },
     "ui/ammo-splitter": {
       "frame": {
-        "x": 825,
-        "y": 4,
+        "x": 528,
+        "y": 205,
         "w": 117,
         "h": 119
       },
@@ -182,8 +482,8 @@
     },
     "ui/medal-gold": {
       "frame": {
-        "x": 4,
-        "y": 129,
+        "x": 649,
+        "y": 205,
         "w": 107,
         "h": 116
       },
@@ -202,8 +502,8 @@
     },
     "ui/target-red": {
       "frame": {
-        "x": 115,
-        "y": 129,
+        "x": 760,
+        "y": 205,
         "w": 70,
         "h": 50
       },
@@ -222,8 +522,8 @@
     },
     "ui/target-blue": {
       "frame": {
-        "x": 189,
-        "y": 129,
+        "x": 834,
+        "y": 205,
         "w": 95,
         "h": 53
       },
@@ -242,8 +542,8 @@
     },
     "ui/arrow-red": {
       "frame": {
-        "x": 288,
-        "y": 129,
+        "x": 4,
+        "y": 330,
         "w": 104,
         "h": 53
       },
@@ -262,8 +562,8 @@
     },
     "ui/arrow-blue": {
       "frame": {
-        "x": 396,
-        "y": 129,
+        "x": 112,
+        "y": 330,
         "w": 89,
         "h": 57
       },
@@ -282,8 +582,8 @@
     },
     "ui/arrow-gold": {
       "frame": {
-        "x": 489,
-        "y": 129,
+        "x": 205,
+        "y": 330,
         "w": 90,
         "h": 60
       },
@@ -302,8 +602,8 @@
     },
     "ui/crate-star": {
       "frame": {
-        "x": 583,
-        "y": 129,
+        "x": 299,
+        "y": 330,
         "w": 88,
         "h": 93
       },
@@ -322,8 +622,8 @@
     },
     "ui/crate-health": {
       "frame": {
-        "x": 675,
-        "y": 129,
+        "x": 391,
+        "y": 330,
         "w": 94,
         "h": 94
       },
@@ -342,8 +642,8 @@
     },
     "ui/trophy-generated": {
       "frame": {
-        "x": 4,
-        "y": 249,
+        "x": 489,
+        "y": 330,
         "w": 274,
         "h": 294
       },
@@ -362,8 +662,8 @@
     },
     "ui/medal-silver-generated": {
       "frame": {
-        "x": 282,
-        "y": 249,
+        "x": 767,
+        "y": 330,
         "w": 174,
         "h": 290
       },
@@ -382,8 +682,8 @@
     },
     "ui/warning-generated": {
       "frame": {
-        "x": 460,
-        "y": 249,
+        "x": 4,
+        "y": 628,
         "w": 266,
         "h": 250
       },
@@ -402,8 +702,8 @@
     },
     "ui/ready-badge-generated": {
       "frame": {
-        "x": 4,
-        "y": 547,
+        "x": 274,
+        "y": 628,
         "w": 366,
         "h": 202
       },
@@ -422,8 +722,8 @@
     },
     "ui/power-token-generated": {
       "frame": {
-        "x": 374,
-        "y": 547,
+        "x": 644,
+        "y": 628,
         "w": 242,
         "h": 242
       },
@@ -442,8 +742,8 @@
     },
     "ui/pennant-red-generated": {
       "frame": {
-        "x": 620,
-        "y": 547,
+        "x": 4,
+        "y": 882,
         "w": 224,
         "h": 242
       },
@@ -462,8 +762,8 @@
     },
     "ui/pennant-blue-generated": {
       "frame": {
-        "x": 4,
-        "y": 793,
+        "x": 232,
+        "y": 882,
         "w": 226,
         "h": 242
       },
@@ -482,8 +782,8 @@
     },
     "ui/start-button-generated": {
       "frame": {
-        "x": 234,
-        "y": 793,
+        "x": 462,
+        "y": 882,
         "w": 266,
         "h": 216
       },
@@ -502,8 +802,8 @@
     },
     "ui/score-plaque-generated": {
       "frame": {
-        "x": 504,
-        "y": 793,
+        "x": 4,
+        "y": 1128,
         "w": 340,
         "h": 174
       },
@@ -522,8 +822,8 @@
     },
     "ui/speed-arrow-generated": {
       "frame": {
-        "x": 4,
-        "y": 1039,
+        "x": 348,
+        "y": 1128,
         "w": 230,
         "h": 136
       },
@@ -542,8 +842,8 @@
     },
     "ui/bracket-left-generated": {
       "frame": {
-        "x": 238,
-        "y": 1039,
+        "x": 582,
+        "y": 1128,
         "w": 204,
         "h": 196
       },
@@ -562,8 +862,8 @@
     },
     "ui/bracket-right-generated": {
       "frame": {
-        "x": 446,
-        "y": 1039,
+        "x": 790,
+        "y": 1128,
         "w": 190,
         "h": 196
       },
@@ -582,8 +882,8 @@
     },
     "props/rack-javelin": {
       "frame": {
-        "x": 640,
-        "y": 1039,
+        "x": 4,
+        "y": 1328,
         "w": 143,
         "h": 103
       },
@@ -602,8 +902,8 @@
     },
     "props/rack-shotput": {
       "frame": {
-        "x": 787,
-        "y": 1039,
+        "x": 151,
+        "y": 1328,
         "w": 153,
         "h": 68
       },
@@ -622,8 +922,8 @@
     },
     "props/rack-discs": {
       "frame": {
-        "x": 4,
-        "y": 1239,
+        "x": 308,
+        "y": 1328,
         "w": 124,
         "h": 79
       },
@@ -642,8 +942,8 @@
     },
     "props/equipment-crate": {
       "frame": {
-        "x": 132,
-        "y": 1239,
+        "x": 436,
+        "y": 1328,
         "w": 106,
         "h": 71
       },
@@ -662,8 +962,8 @@
     },
     "props/cone-stack": {
       "frame": {
-        "x": 242,
-        "y": 1239,
+        "x": 546,
+        "y": 1328,
         "w": 65,
         "h": 93
       },
@@ -682,8 +982,8 @@
     },
     "props/scoreboard": {
       "frame": {
-        "x": 311,
-        "y": 1239,
+        "x": 615,
+        "y": 1328,
         "w": 212,
         "h": 102
       },
@@ -702,8 +1002,8 @@
     },
     "props/torch": {
       "frame": {
-        "x": 527,
-        "y": 1239,
+        "x": 831,
+        "y": 1328,
         "w": 47,
         "h": 108
       },
@@ -722,8 +1022,8 @@
     },
     "props/pennants": {
       "frame": {
-        "x": 578,
-        "y": 1239,
+        "x": 882,
+        "y": 1328,
         "w": 13,
         "h": 5
       },
@@ -742,8 +1042,8 @@
     },
     "fx/confetti-small": {
       "frame": {
-        "x": 595,
-        "y": 1239,
+        "x": 899,
+        "y": 1328,
         "w": 99,
         "h": 54
       },
@@ -762,8 +1062,8 @@
     },
     "fx/confetti-burst": {
       "frame": {
-        "x": 698,
-        "y": 1239,
+        "x": 4,
+        "y": 1440,
         "w": 116,
         "h": 52
       },
@@ -782,8 +1082,8 @@
     },
     "fx/impact-javelin": {
       "frame": {
-        "x": 818,
-        "y": 1239,
+        "x": 124,
+        "y": 1440,
         "w": 74,
         "h": 58
       },
@@ -802,8 +1102,8 @@
     },
     "fx/impact-shotput": {
       "frame": {
-        "x": 896,
-        "y": 1239,
+        "x": 202,
+        "y": 1440,
         "w": 88,
         "h": 64
       },
@@ -822,8 +1122,8 @@
     },
     "fx/spark-blue": {
       "frame": {
-        "x": 4,
-        "y": 1351,
+        "x": 294,
+        "y": 1440,
         "w": 40,
         "h": 32
       },
@@ -842,8 +1142,8 @@
     },
     "fx/spark-purple": {
       "frame": {
-        "x": 48,
-        "y": 1351,
+        "x": 338,
+        "y": 1440,
         "w": 31,
         "h": 28
       },
@@ -862,8 +1162,8 @@
     },
     "fx/spark-green": {
       "frame": {
-        "x": 83,
-        "y": 1351,
+        "x": 373,
+        "y": 1440,
         "w": 12,
         "h": 14
       },
@@ -882,8 +1182,8 @@
     },
     "fx/trail-gold": {
       "frame": {
-        "x": 99,
-        "y": 1351,
+        "x": 389,
+        "y": 1440,
         "w": 18,
         "h": 11
       },
@@ -902,8 +1202,8 @@
     },
     "fx/trail-blue": {
       "frame": {
-        "x": 121,
-        "y": 1351,
+        "x": 411,
+        "y": 1440,
         "w": 11,
         "h": 13
       },
@@ -922,8 +1222,8 @@
     },
     "fx/trail-red": {
       "frame": {
-        "x": 136,
-        "y": 1351,
+        "x": 426,
+        "y": 1440,
         "w": 15,
         "h": 9
       },
@@ -942,8 +1242,8 @@
     },
     "fx/trail-green": {
       "frame": {
-        "x": 155,
-        "y": 1351,
+        "x": 445,
+        "y": 1440,
         "w": 44,
         "h": 47
       },
@@ -962,8 +1262,8 @@
     },
     "fx/smoke-small": {
       "frame": {
-        "x": 203,
-        "y": 1351,
+        "x": 493,
+        "y": 1440,
         "w": 30,
         "h": 10
       },
@@ -982,8 +1282,8 @@
     },
     "fx/smoke-medium": {
       "frame": {
-        "x": 237,
-        "y": 1351,
+        "x": 527,
+        "y": 1440,
         "w": 100,
         "h": 83
       },
@@ -1002,8 +1302,8 @@
     },
     "fx/smoke-large": {
       "frame": {
-        "x": 341,
-        "y": 1351,
+        "x": 631,
+        "y": 1440,
         "w": 96,
         "h": 96
       },
@@ -1022,8 +1322,8 @@
     },
     "fx/starburst-gold-generated": {
       "frame": {
-        "x": 441,
-        "y": 1351,
+        "x": 731,
+        "y": 1440,
         "w": 270,
         "h": 238
       },
@@ -1042,8 +1342,8 @@
     },
     "fx/starburst-blue-generated": {
       "frame": {
-        "x": 715,
-        "y": 1351,
+        "x": 4,
+        "y": 1682,
         "w": 182,
         "h": 214
       },
@@ -1062,8 +1362,8 @@
     },
     "fx/confetti-generated": {
       "frame": {
-        "x": 4,
-        "y": 1593,
+        "x": 190,
+        "y": 1682,
         "w": 286,
         "h": 228
       },

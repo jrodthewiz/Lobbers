@@ -12,6 +12,31 @@ export const SPRITES = {
     shotput: "ammo/shotput",
     splitter: "ammo/splitter",
   },
+  tank: {
+    shadow: "tank/shadow",
+    blue: {
+      bodyIdle: "tank/blue/body-idle",
+      bodyDamaged: "tank/blue/body-damaged",
+      treads: [
+        "tank/blue/tread-0",
+        "tank/blue/tread-1",
+        "tank/blue/tread-2",
+        "tank/blue/tread-3",
+      ],
+      pilot: "tank/blue/pilot",
+    },
+    red: {
+      bodyIdle: "tank/red/body-idle",
+      bodyDamaged: "tank/red/body-damaged",
+      treads: [
+        "tank/red/tread-0",
+        "tank/red/tread-1",
+        "tank/red/tread-2",
+        "tank/red/tread-3",
+      ],
+      pilot: "tank/red/pilot",
+    },
+  },
   ui: {
     ammoJavelin: "ui/ammo-javelin",
     ammoShotput: "ui/ammo-shotput",

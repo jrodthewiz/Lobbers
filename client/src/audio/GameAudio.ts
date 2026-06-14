@@ -15,6 +15,9 @@ const AUDIO_SOURCES = {
     new URL("../assets/audio/charge-start.ogg", import.meta.url).href,
     new URL("../assets/audio/charge-start-2.ogg", import.meta.url).href,
     new URL("../assets/audio/charge-start-3.ogg", import.meta.url).href,
+    new URL("../assets/audio/charge-start-4.ogg", import.meta.url).href,
+    new URL("../assets/audio/charge-start-5.ogg", import.meta.url).href,
+    new URL("../assets/audio/charge-start-6.ogg", import.meta.url).href,
   ],
   "fragment-impact": [
     new URL("../assets/audio/fragment-impact.ogg", import.meta.url).href,
@@ -27,12 +30,16 @@ const AUDIO_SOURCES = {
     new URL("../assets/audio/item-pickup.ogg", import.meta.url).href,
     new URL("../assets/audio/item-pickup-2.ogg", import.meta.url).href,
     new URL("../assets/audio/item-pickup-3.ogg", import.meta.url).href,
+    new URL("../assets/audio/item-pickup-4.ogg", import.meta.url).href,
+    new URL("../assets/audio/item-pickup-5.ogg", import.meta.url).href,
   ],
   "javelin-impact": [
     new URL("../assets/audio/javelin-impact.ogg", import.meta.url).href,
     new URL("../assets/audio/javelin-impact-2.ogg", import.meta.url).href,
     new URL("../assets/audio/javelin-impact-3.ogg", import.meta.url).href,
     new URL("../assets/audio/javelin-impact-4.ogg", import.meta.url).href,
+    new URL("../assets/audio/javelin-impact-5.ogg", import.meta.url).href,
+    new URL("../assets/audio/javelin-impact-6.ogg", import.meta.url).href,
   ],
   "player-hit": [
     new URL("../assets/audio/player-hit.ogg", import.meta.url).href,
@@ -55,32 +62,45 @@ const AUDIO_SOURCES = {
   "round-lose": [
     new URL("../assets/audio/round-lose-1.ogg", import.meta.url).href,
     new URL("../assets/audio/round-lose-2.ogg", import.meta.url).href,
+    new URL("../assets/audio/round-lose-3.ogg", import.meta.url).href,
   ],
   "round-start": [
     new URL("../assets/audio/round-start-1.ogg", import.meta.url).href,
     new URL("../assets/audio/round-start-2.ogg", import.meta.url).href,
+    new URL("../assets/audio/round-start-3.ogg", import.meta.url).href,
   ],
   "round-win": [
     new URL("../assets/audio/round-win-1.ogg", import.meta.url).href,
     new URL("../assets/audio/round-win-2.ogg", import.meta.url).href,
+    new URL("../assets/audio/round-win-3.ogg", import.meta.url).href,
+    new URL("../assets/audio/round-win-4.ogg", import.meta.url).href,
   ],
   "shotput-impact": [
     new URL("../assets/audio/shotput-impact.ogg", import.meta.url).href,
     new URL("../assets/audio/shotput-impact-2.ogg", import.meta.url).href,
     new URL("../assets/audio/shotput-impact-3.ogg", import.meta.url).href,
     new URL("../assets/audio/shotput-impact-4.ogg", import.meta.url).href,
+    new URL("../assets/audio/shotput-impact-5.ogg", import.meta.url).href,
+    new URL("../assets/audio/shotput-impact-6.ogg", import.meta.url).href,
   ],
   "splitter-pop": [
     new URL("../assets/audio/splitter-pop.ogg", import.meta.url).href,
     new URL("../assets/audio/splitter-pop-2.ogg", import.meta.url).href,
     new URL("../assets/audio/splitter-pop-3.ogg", import.meta.url).href,
     new URL("../assets/audio/splitter-pop-4.ogg", import.meta.url).href,
+    new URL("../assets/audio/splitter-pop-5.ogg", import.meta.url).href,
+    new URL("../assets/audio/splitter-pop-6.ogg", import.meta.url).href,
+    new URL("../assets/audio/splitter-pop-7.ogg", import.meta.url).href,
   ],
   "throw-release": [
     new URL("../assets/audio/throw-release.ogg", import.meta.url).href,
     new URL("../assets/audio/throw-release-2.ogg", import.meta.url).href,
     new URL("../assets/audio/throw-release-3.ogg", import.meta.url).href,
     new URL("../assets/audio/throw-release-4.ogg", import.meta.url).href,
+    new URL("../assets/audio/throw-release-5.ogg", import.meta.url).href,
+    new URL("../assets/audio/throw-release-6.ogg", import.meta.url).href,
+    new URL("../assets/audio/throw-release-7.ogg", import.meta.url).href,
+    new URL("../assets/audio/throw-release-8.ogg", import.meta.url).href,
   ],
   "ui-back": [
     new URL("../assets/audio/ui-back.ogg", import.meta.url).href,
@@ -102,11 +122,14 @@ const AUDIO_SOURCES = {
     new URL("../assets/audio/ui-confirm.ogg", import.meta.url).href,
     new URL("../assets/audio/ui-confirm-2.ogg", import.meta.url).href,
     new URL("../assets/audio/ui-confirm-3.ogg", import.meta.url).href,
+    new URL("../assets/audio/ui-confirm-4.ogg", import.meta.url).href,
+    new URL("../assets/audio/ui-confirm-5.ogg", import.meta.url).href,
   ],
   "ui-error": [
     new URL("../assets/audio/ui-error.ogg", import.meta.url).href,
     new URL("../assets/audio/ui-error-2.ogg", import.meta.url).href,
     new URL("../assets/audio/ui-error-3.ogg", import.meta.url).href,
+    new URL("../assets/audio/ui-error-4.ogg", import.meta.url).href,
   ],
   "ui-focus": [
     new URL("../assets/audio/ui-focus-1.ogg", import.meta.url).href,
@@ -147,6 +170,7 @@ const AUDIO_SOURCES = {
     new URL("../assets/audio/ui-select-3.ogg", import.meta.url).href,
     new URL("../assets/audio/ui-select-4.ogg", import.meta.url).href,
     new URL("../assets/audio/ui-select-5.ogg", import.meta.url).href,
+    new URL("../assets/audio/ui-select-6.ogg", import.meta.url).href,
   ],
 } as const;
 
@@ -156,6 +180,7 @@ type QueuedSound = {
   key: GameSoundKey;
   delayMs?: number;
   volumeScale?: number;
+  rateScale?: number;
 };
 
 const DEFAULT_VOLUME: Record<GameSoundKey, number> = {
@@ -214,7 +239,7 @@ const RATE_JITTER: Partial<Record<GameSoundKey, number>> = {
 };
 
 const clampVolume = (value: number): number => Math.max(0, Math.min(1, value));
-const clampRate = (value: number): number => Math.max(0.75, Math.min(1.35, value));
+const clampRate = (value: number): number => Math.max(0.55, Math.min(1.35, value));
 const jitter = (range: number): number => 1 + (((Math.random() * 2) - 1) * range);
 
 export class GameAudio {
@@ -243,7 +268,7 @@ export class GameAudio {
     }
   }
 
-  play(key: GameSoundKey, volumeScale = 1): void {
+  play(key: GameSoundKey, volumeScale = 1, rateScale = 1): void {
     const now = performance.now();
     const minInterval = MIN_INTERVAL_MS[key] ?? 0;
     const lastPlayedAt = this.lastPlayedAtMs.get(key) ?? Number.NEGATIVE_INFINITY;
@@ -255,7 +280,7 @@ export class GameAudio {
 
     const clip = source.cloneNode(true) as HTMLAudioElement;
     clip.volume = clampVolume(DEFAULT_VOLUME[key] * volumeScale);
-    clip.playbackRate = clampRate(jitter(RATE_JITTER[key] ?? 0));
+    clip.playbackRate = clampRate(jitter(RATE_JITTER[key] ?? 0) * rateScale);
     clip.currentTime = 0;
     void clip.play().catch(() => {
       // Browsers may block playback until the first user gesture.
@@ -265,10 +290,10 @@ export class GameAudio {
   playLayered(sounds: QueuedSound[]): void {
     for (const sound of sounds) {
       if ((sound.delayMs ?? 0) <= 0) {
-        this.play(sound.key, sound.volumeScale);
+        this.play(sound.key, sound.volumeScale, sound.rateScale);
         continue;
       }
-      window.setTimeout(() => this.play(sound.key, sound.volumeScale), sound.delayMs);
+      window.setTimeout(() => this.play(sound.key, sound.volumeScale, sound.rateScale), sound.delayMs);
     }
   }
 

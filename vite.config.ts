@@ -3,6 +3,8 @@ import path from "node:path";
 import { defineConfig } from "vitest/config";
 
 const projectRoot = path.dirname(fileURLToPath(import.meta.url));
+const clientPort = Number(process.env.LOBBERS_DEV_CLIENT_PORT ?? process.env.VITE_PORT ?? 5173);
+const serverPort = process.env.LOBBERS_DEV_SERVER_PORT ?? process.env.PORT ?? "2567";
 
 export default defineConfig({
   root: "client",
@@ -19,9 +21,9 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
+    port: clientPort,
     proxy: {
-      "/api": "http://localhost:2567",
+      "/api": `http://localhost:${serverPort}`,
     },
     fs: {
       allow: [projectRoot],

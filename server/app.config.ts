@@ -3,7 +3,7 @@ import path from "node:path";
 import express from "express";
 import config from "@colyseus/tools";
 import { ROOM_NAME } from "../shared/game/constants";
-import { listOpenLobbies } from "./lobbies";
+import { getLobby, listOpenLobbies, normalizeLobbyCode } from "./lobbies";
 import { ThrowRoom } from "./rooms/ThrowRoom";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -36,6 +36,20 @@ export default config({
 
     app.get("/api/lobbies", (_req, res) => {
       res.json({ lobbies: listOpenLobbies() });
+    });
+
+    app.get("/api/lobbies/:code", (req, res) => {
+      const code = normalizeLobbyCode(req.params.code);
+      const lobby = getLobby(code);
+      if (!lobby) {
+        res.status(404).json({ exists: false, code });
+        return;
+      }
+      res.json({
+        exists: true,
+        lobby,
+        open: lobby.roundState === "waiting" && lobby.playerCount < lobby.maxPlayers,
+      });
     });
 
     if (process.env.NODE_ENV === "production") {

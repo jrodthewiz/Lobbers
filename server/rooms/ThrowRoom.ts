@@ -31,12 +31,13 @@ import type {
   AmmoType,
 } from "../../shared/game/types";
 import { LobbersState, PlayerState, ProjectileState } from "../schema/LobbersState";
-import { createLobbyCode, normalizeLobbyCode, removeLobby, upsertLobby } from "../lobbies";
+import { createLobbyCode, createSplitLobbyCode, normalizeLobbyCode, removeLobby, upsertLobby } from "../lobbies";
 
 type CreateOptions = {
   hostName?: unknown;
   playerName?: unknown;
   bot?: unknown;
+  splitFromCode?: unknown;
 };
 
 type JoinOptions = {
@@ -130,7 +131,8 @@ export class ThrowRoom extends Room<LobbersState> {
 
   override onCreate(options: CreateOptions): void {
     this.practiceBotEnabled = options.bot === true;
-    this.state.code = createLobbyCode();
+    const splitFromCode = normalizeLobbyCode(options.splitFromCode);
+    this.state.code = splitFromCode ? createSplitLobbyCode(splitFromCode) : createLobbyCode();
     this.state.hostName = toPlayerName(options.hostName ?? options.playerName, "Host");
     this.setPatchRate(1000 / SIMULATION.patchHz);
     this.setSimulationInterval(() => this.update(SIMULATION.stepSeconds), 1000 / SIMULATION.tickHz);

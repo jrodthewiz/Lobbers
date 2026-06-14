@@ -27,7 +27,7 @@ export type LobbyInfo = {
   code: string;
   hostName: string;
   playerCount: number;
-  maxPlayers: 2;
+  maxPlayers: number;
   roundState: RoundState;
 };
 

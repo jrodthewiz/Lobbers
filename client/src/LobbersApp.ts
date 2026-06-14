@@ -19,6 +19,12 @@ type LobbiesResponse = {
   lobbies?: LobbyInfo[];
 };
 
+type LobbyLookupResponse = {
+  exists?: boolean;
+  open?: boolean;
+  lobby?: LobbyInfo;
+};
+
 const readString = (source: unknown, key: string, fallback: string): string => {
   const value = (source as Record<string, unknown> | null)?.[key];
   return typeof value === "string" ? value : fallback;
@@ -175,12 +181,43 @@ export class LobbersApp {
       return;
     }
     await this.connect(async () => {
-      const room = await this.client.join(ROOM_NAME, {
-        code: normalized,
-        playerName,
-      });
+      const room = await this.joinOrSplitLobby(normalized, playerName);
       this.attachRoom(room);
     }, `Joining ${normalized}...`);
+  }
+
+  private async joinOrSplitLobby(code: string, playerName: string): Promise<Room> {
+    try {
+      return await this.client.join(ROOM_NAME, {
+        code,
+        playerName,
+      });
+    } catch (joinError) {
+      const lookup = await this.lookupLobby(code);
+      if (!lookup.exists) {
+        throw joinError;
+      }
+      if (lookup.open) {
+        throw joinError;
+      }
+      this.setStatus(`Splitting ${code} into a new location...`);
+      return this.client.create(ROOM_NAME, {
+        hostName: `${playerName} split`,
+        playerName,
+        splitFromCode: code,
+      });
+    }
+  }
+
+  private async lookupLobby(code: string): Promise<LobbyLookupResponse> {
+    try {
+      const response = await fetch(`${this.serverHttpUrl}/api/lobbies/${encodeURIComponent(code)}`, { cache: "no-store" });
+      if (response.status === 404) return { exists: false, open: false };
+      if (!response.ok) return { exists: false, open: false };
+      return await response.json() as LobbyLookupResponse;
+    } catch {
+      return { exists: false, open: false };
+    }
   }
 
   private async connect(action: () => Promise<void>, status: string): Promise<void> {
@@ -265,10 +302,7 @@ export class LobbersApp {
   private throwRelease(aim: Vec2): void {
     if (!this.room) return;
     this.chargeStartedAtMs = null;
-    this.audio.playLayered([
-      { key: "throw-release" },
-      { key: this.resolveAmmoSelectSound(this.selectedAmmo), delayMs: 28, volumeScale: 0.38 },
-    ]);
+    this.audio.playLayered(this.resolveThrowReleaseSounds(this.selectedAmmo));
     this.room.send(CLIENT_MESSAGES.THROW_RELEASE, {
       aimX: aim.x,
       aimY: aim.y,
@@ -311,7 +345,7 @@ export class LobbersApp {
     let impactsPlayed = 0;
     for (const [id, projectile] of this.lastProjectilesById) {
       if (nextProjectilesById.has(id) || impactsPlayed >= 3) continue;
-      this.audio.play(this.resolveProjectileImpactSound(projectile));
+      this.audio.playLayered(this.resolveProjectileImpactSounds(projectile));
       impactsPlayed += 1;
     }
 
@@ -352,12 +386,50 @@ export class LobbersApp {
     }
   }
 
-  private resolveProjectileImpactSound(projectile: ProjectileView): GameSoundKey {
-    if (projectile.ammoType === "shotput") return "shotput-impact";
-    if (projectile.ammoType === "splitter") {
-      return projectile.radius < AMMO_DEFINITIONS.splitter.radius ? "fragment-impact" : "splitter-pop";
+  private resolveProjectileImpactSounds(projectile: ProjectileView): Array<{
+    key: GameSoundKey;
+    delayMs?: number;
+    volumeScale?: number;
+    rateScale?: number;
+  }> {
+    if (projectile.ammoType === "shotput") {
+      return [
+        { key: "shotput-impact", volumeScale: 1.08, rateScale: 0.86 },
+        { key: "fragment-impact", delayMs: 18, volumeScale: 0.58, rateScale: 0.78 },
+        { key: "shotput-impact", delayMs: 72, volumeScale: 0.52, rateScale: 0.64 },
+      ];
     }
-    return "javelin-impact";
+    if (projectile.ammoType === "splitter") {
+      return [
+        {
+          key: projectile.radius < AMMO_DEFINITIONS.splitter.radius ? "fragment-impact" : "splitter-pop",
+          volumeScale: projectile.radius < AMMO_DEFINITIONS.splitter.radius ? 0.76 : 1,
+        },
+      ];
+    }
+    return [
+      { key: "javelin-impact", volumeScale: 0.92 },
+      { key: "fragment-impact", delayMs: 24, volumeScale: 0.34, rateScale: 1.08 },
+    ];
+  }
+
+  private resolveThrowReleaseSounds(ammoType: AmmoType): Array<{
+    key: GameSoundKey;
+    delayMs?: number;
+    volumeScale?: number;
+    rateScale?: number;
+  }> {
+    if (ammoType === "shotput") {
+      return [
+        { key: "throw-release", volumeScale: 0.92, rateScale: 0.88 },
+        { key: "shotput-impact", delayMs: 24, volumeScale: 0.3, rateScale: 0.62 },
+        { key: this.resolveAmmoSelectSound(ammoType), delayMs: 42, volumeScale: 0.22, rateScale: 0.84 },
+      ];
+    }
+    return [
+      { key: "throw-release" },
+      { key: this.resolveAmmoSelectSound(ammoType), delayMs: 28, volumeScale: 0.38 },
+    ];
   }
 
   private resolveAmmoSelectSound(ammoType: AmmoType): GameSoundKey {

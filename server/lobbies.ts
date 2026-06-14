@@ -24,6 +24,17 @@ export const createLobbyCode = (): string => {
   return `${Date.now().toString(36).slice(-6)}`.toUpperCase();
 };
 
+export const createSplitLobbyCode = (rootCode: string): string => {
+  const normalizedRoot = normalizeLobbyCode(rootCode);
+  for (let attempt = 2; attempt < 1024; attempt += 1) {
+    const suffix = attempt.toString(36).toUpperCase();
+    const prefix = normalizedRoot.slice(0, Math.max(1, 8 - suffix.length));
+    const code = `${prefix}${suffix}`;
+    if (!hasLobbyCode(code)) return code;
+  }
+  return createLobbyCode();
+};
+
 export const upsertLobby = (info: LobbyInfo): void => {
   lobbyByCode.set(normalizeLobbyCode(info.code), {
     ...info,
@@ -34,6 +45,13 @@ export const upsertLobby = (info: LobbyInfo): void => {
 
 export const removeLobby = (code: string): void => {
   lobbyByCode.delete(normalizeLobbyCode(code));
+};
+
+export const getLobby = (code: string): LobbyInfo | null => {
+  const lobby = lobbyByCode.get(normalizeLobbyCode(code));
+  if (!lobby) return null;
+  const { updatedAtMs: _updatedAtMs, ...info } = lobby;
+  return info;
 };
 
 export const listOpenLobbies = (): LobbyInfo[] => (

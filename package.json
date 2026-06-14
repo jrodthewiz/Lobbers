@@ -8,9 +8,12 @@
     "node": ">=20.9.0"
   },
   "scripts": {
-    "dev": "concurrently -n server,client -c cyan,magenta \"npm run dev:server\" \"npm run dev:client\"",
+    "dev": "node scripts/dev-side.mjs",
+    "dev:default": "concurrently -n server,client -c cyan,magenta \"npm run dev:server\" \"npm run dev:client\"",
     "dev:client": "vite --host 0.0.0.0",
+    "dev:client:side": "set VITE_SERVER_URL=http://localhost:2577&& vite --host 0.0.0.0 --port 5183",
     "dev:server": "tsx watch server/index.ts",
+    "dev:server:side": "set PORT=2577&& tsx watch server/index.ts",
     "start": "tsx server/index.ts",
     "build": "npm run typecheck && vite build",
     "typecheck": "tsc --noEmit",

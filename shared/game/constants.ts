@@ -37,7 +37,7 @@ export const CHARGE = {
 
 export const MOVEMENT = {
   moveSpeedPxPerSecond: 260,
-  jumpVelocityPxPerSecond: -560,
+  jumpVelocityPxPerSecond: -390,
   maxFallSpeedPxPerSecond: 920,
   sideBoundaryPadding: 88,
   centerNoCrossPadding: 136,
