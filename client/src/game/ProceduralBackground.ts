@@ -262,8 +262,21 @@ export class ProceduralBackground {
     const inset = 94 + (this.seeded(311) * 88);
     const standY = WORLD.groundY - (108 + (this.seeded(313) * 34));
     const standHeight = 62 + (this.seeded(317) * 30);
+    const railY = standY + standHeight + 7;
+    ctx.fillStyle = "rgba(8, 13, 24, 0.2)";
+    ctx.fillRect(inset - 22, standY - 18, width - ((inset - 22) * 2), 18);
     ctx.fillStyle = this.palette.stand;
     ctx.fillRect(inset, standY, width - (inset * 2), standHeight);
+
+    const sectionWidth = (width - (inset * 2)) / 6;
+    for (let section = 0; section < 6; section += 1) {
+      const x = inset + (section * sectionWidth);
+      const alpha = 0.035 + (this.seeded(329 + section) * 0.055);
+      ctx.fillStyle = section % 2 === 0
+        ? `rgba(${this.palette.glowRgb}, ${alpha})`
+        : `rgba(${this.palette.standLineRgb}, ${alpha})`;
+      ctx.fillRect(x + 4, standY + 4, sectionWidth - 8, standHeight - 8);
+    }
 
     for (let row = 0; row < 5; row += 1) {
       const y = standY + 10 + (row * (standHeight / 5));
@@ -284,6 +297,19 @@ export class ProceduralBackground {
         : `rgba(${this.palette.standLineRgb}, ${alpha})`;
       ctx.fillRect(x, y, 3, 2);
     }
+
+    ctx.fillStyle = `rgba(${this.palette.standLineRgb}, 0.22)`;
+    ctx.fillRect(inset - 28, railY, width - ((inset - 28) * 2), 4);
+    ctx.fillStyle = "rgba(15, 23, 42, 0.32)";
+    for (let i = 0; i < 10; i += 1) {
+      const bannerX = inset + 36 + (i * ((width - (inset * 2) - 72) / 9));
+      ctx.fillRect(bannerX - 2, railY + 4, 4, 18);
+      ctx.fillStyle = i % 2 === 0
+        ? `rgba(${this.palette.glowRgb}, 0.24)`
+        : `rgba(${this.palette.standLineRgb}, 0.2)`;
+      ctx.fillRect(bannerX + 3, railY + 6, 28, 11);
+      ctx.fillStyle = "rgba(15, 23, 42, 0.32)";
+    }
   }
 
   private drawLightTowers(ctx: CanvasRenderingContext2D): void {
@@ -298,9 +324,26 @@ export class ProceduralBackground {
       ctx.moveTo(x, WORLD.groundY - 98);
       ctx.lineTo(x, WORLD.groundY - 98 - towerHeight);
       ctx.stroke();
+      ctx.strokeStyle = `rgba(${this.palette.towerRgb}, 0.12)`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x - 20, WORLD.groundY - 98);
+      ctx.lineTo(x + 20, WORLD.groundY - 98 - towerHeight);
+      ctx.moveTo(x + 20, WORLD.groundY - 98);
+      ctx.lineTo(x - 20, WORLD.groundY - 98 - towerHeight);
+      ctx.stroke();
+
       ctx.fillStyle = `rgba(${this.palette.glowRgb}, 0.2)`;
       for (let i = 0; i < 3; i += 1) {
         ctx.fillRect(x - 35 + (i * 24), WORLD.groundY - 113 - towerHeight, 18, 13);
+        ctx.fillStyle = `rgba(${this.palette.glowRgb}, 0.07)`;
+        ctx.beginPath();
+        ctx.moveTo(x - 26 + (i * 24), WORLD.groundY - 100 - towerHeight);
+        ctx.lineTo(x - 82 + (i * 24), WORLD.groundY - 8);
+        ctx.lineTo(x + 30 + (i * 24), WORLD.groundY - 8);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = `rgba(${this.palette.glowRgb}, 0.2)`;
       }
     }
   }
@@ -317,6 +360,15 @@ export class ProceduralBackground {
     const gap = 78 + (this.seeded(911) * 22);
     for (let x = 0; x < width; x += gap) {
       ctx.fillRect(x, WORLD.groundY, stripeWidth, height - WORLD.groundY);
+    }
+
+    ctx.strokeStyle = "rgba(248, 250, 252, 0.07)";
+    ctx.lineWidth = 1;
+    for (let y = WORLD.groundY + 32; y < height; y += 42) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+      ctx.stroke();
     }
   }
 

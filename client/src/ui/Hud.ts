@@ -149,6 +149,11 @@ export class Hud {
       <section id="lobbyPanel" class="lobby-panel">
         <span class="ui-sprite menu-corner-prop menu-corner-prop-left" id="menuLeftProp" aria-hidden="true"></span>
         <span class="ui-sprite menu-corner-prop menu-corner-prop-right" id="menuRightProp" aria-hidden="true"></span>
+        <div class="menu-ticket-strip" aria-hidden="true">
+          <span>Lane 01</span>
+          <span>Wind Check</span>
+          <span>Record Board</span>
+        </div>
         <div class="brand-row">
           <div class="title-lockup">
             <span class="ui-sprite brand-mark" id="brandMark" aria-hidden="true"></span>
@@ -160,6 +165,10 @@ export class Hud {
           <div class="status-pill"><span class="ui-sprite pill-icon" id="statusIcon" aria-hidden="true"></span><span id="statusText">Offline</span></div>
         </div>
         <div class="lobby-controls">
+          <div class="section-plaque">
+            <span class="ui-sprite board-icon" id="entryBoardIcon" aria-hidden="true"></span>
+            <span>Competitor Entry</span>
+          </div>
           <label>
             Name
             <input id="playerNameInput" maxlength="18" autocomplete="off" value="Lobber" />
@@ -366,22 +375,23 @@ export class Hud {
 
   private applyStaticSprites(): void {
     const spriteById: Record<string, string> = {
-      brandMark: SPRITES.ui.medalGold,
-      statusIcon: SPRITES.fx.sparkBlue,
-      hostButtonIcon: SPRITES.props.scoreboard,
+      brandMark: SPRITES.ui.trophyGenerated,
+      statusIcon: SPRITES.ui.readyBadgeGenerated,
+      hostButtonIcon: SPRITES.ui.scorePlaqueGenerated,
       botButtonIcon: SPRITES.ui.targetRed,
-      refreshButtonIcon: SPRITES.props.equipmentCrate,
-      joinButtonIcon: SPRITES.ui.arrowGold,
-      lobbyListIcon: SPRITES.ui.arrowGold,
-      menuLeftProp: SPRITES.props.rackJavelin,
-      menuRightProp: SPRITES.props.coneStack,
-      blueSideIcon: SPRITES.props.flagBlue,
-      redSideIcon: SPRITES.props.flagRed,
+      refreshButtonIcon: SPRITES.ui.speedArrowGenerated,
+      joinButtonIcon: SPRITES.ui.startButtonGenerated,
+      lobbyListIcon: SPRITES.ui.scorePlaqueGenerated,
+      entryBoardIcon: SPRITES.ui.medalSilverGenerated,
+      menuLeftProp: SPRITES.ui.bracketLeftGenerated,
+      menuRightProp: SPRITES.ui.bracketRightGenerated,
+      blueSideIcon: SPRITES.ui.pennantBlueGenerated,
+      redSideIcon: SPRITES.ui.pennantRedGenerated,
       selectedAmmoIcon: AMMO_UI_FRAMES.javelin,
       lastDistanceIcon: SPRITES.ui.targetBlue,
-      bestDistanceIcon: SPRITES.ui.medalGold,
+      bestDistanceIcon: SPRITES.ui.trophyGenerated,
       waitingPanelIcon: SPRITES.props.pennants,
-      endedPanelIcon: SPRITES.fx.confettiBurst,
+      endedPanelIcon: SPRITES.fx.confettiGenerated,
     };
 
     for (const [id, frameName] of Object.entries(spriteById)) {
@@ -411,15 +421,15 @@ export class Hud {
   }
 
   private maxSpriteSize(element: HTMLElement): { width: number; height: number } {
-    if (element.classList.contains("brand-mark")) return { width: 54, height: 54 };
-    if (element.classList.contains("menu-corner-prop")) return { width: 82, height: 62 };
+    if (element.classList.contains("brand-mark")) return { width: 64, height: 58 };
+    if (element.classList.contains("menu-corner-prop")) return { width: 112, height: 92 };
     if (element.classList.contains("panel-icon")) return { width: 38, height: 30 };
-    if (element.classList.contains("button-icon")) return { width: 30, height: 28 };
+    if (element.classList.contains("button-icon")) return { width: 34, height: 30 };
     if (element.classList.contains("ammo-icon")) return { width: 34, height: 34 };
     if (element.classList.contains("board-icon")) return { width: 30, height: 24 };
-    if (element.classList.contains("side-flag")) return { width: 20, height: 26 };
+    if (element.classList.contains("side-flag")) return { width: 26, height: 30 };
     if (element.classList.contains("metric-icon")) return { width: 18, height: 18 };
-    if (element.classList.contains("pill-icon")) return { width: 16, height: 16 };
+    if (element.classList.contains("pill-icon")) return { width: 56, height: 26 };
     return { width: 22, height: 22 };
   }
 

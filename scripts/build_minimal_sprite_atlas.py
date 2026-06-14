@@ -45,6 +45,18 @@ FRAMES: tuple[FrameSource, ...] = (
     FrameSource("ui/arrow-gold", "equipment-icons-fx.png", (880, 665, 970, 725)),
     FrameSource("ui/crate-star", "equipment-icons-fx.png", (174, 806, 267, 899)),
     FrameSource("ui/crate-health", "equipment-icons-fx.png", (596, 806, 690, 900)),
+    FrameSource("ui/trophy-generated", "generated-ui-sprites.png", (30, 56, 304, 350)),
+    FrameSource("ui/medal-silver-generated", "generated-ui-sprites.png", (348, 60, 522, 350)),
+    FrameSource("ui/warning-generated", "generated-ui-sprites.png", (566, 88, 832, 338)),
+    FrameSource("ui/ready-badge-generated", "generated-ui-sprites.png", (852, 130, 1218, 332)),
+    FrameSource("ui/power-token-generated", "generated-ui-sprites.png", (1250, 100, 1492, 342)),
+    FrameSource("ui/pennant-red-generated", "generated-ui-sprites.png", (36, 406, 260, 648)),
+    FrameSource("ui/pennant-blue-generated", "generated-ui-sprites.png", (298, 406, 524, 648)),
+    FrameSource("ui/start-button-generated", "generated-ui-sprites.png", (556, 416, 822, 632)),
+    FrameSource("ui/score-plaque-generated", "generated-ui-sprites.png", (862, 450, 1202, 624)),
+    FrameSource("ui/speed-arrow-generated", "generated-ui-sprites.png", (1270, 468, 1500, 604)),
+    FrameSource("ui/bracket-left-generated", "generated-ui-sprites.png", (978, 736, 1182, 932)),
+    FrameSource("ui/bracket-right-generated", "generated-ui-sprites.png", (1256, 736, 1446, 932)),
 
     # Arena props.
     FrameSource("props/rack-javelin", "stadium-props.png", (18, 511, 166, 614)),
@@ -71,12 +83,17 @@ FRAMES: tuple[FrameSource, ...] = (
     FrameSource("fx/smoke-small", "equipment-icons-fx.png", (40, 936, 112, 1002)),
     FrameSource("fx/smoke-medium", "equipment-icons-fx.png", (202, 925, 302, 1008)),
     FrameSource("fx/smoke-large", "equipment-icons-fx.png", (318, 920, 414, 1016)),
+    FrameSource("fx/starburst-gold-generated", "generated-ui-sprites.png", (34, 714, 304, 952)),
+    FrameSource("fx/starburst-blue-generated", "generated-ui-sprites.png", (384, 726, 566, 940)),
+    FrameSource("fx/confetti-generated", "generated-ui-sprites.png", (620, 690, 912, 940)),
 )
 
 
 def is_background(pixel: tuple[int, int, int, int]) -> bool:
     r, g, b, a = pixel
     if a < 18:
+        return True
+    if r > 190 and g < 80 and b > 170:
         return True
     return r > 218 and g > 218 and b > 218 and max(r, g, b) - min(r, g, b) < 18
 
@@ -119,6 +136,15 @@ def remove_checkerboard(crop: Image.Image) -> Image.Image:
         for next_x, next_y in neighbors(x, y, width, height):
             if (next_x, next_y) not in seen:
                 queue.append((next_x, next_y))
+
+    for y in range(height):
+        for x in range(width):
+            r, g, b, a = pixels[x, y]
+            if a < 18:
+                pixels[x, y] = (255, 255, 255, 0)
+                continue
+            if r > 170 and g < 115 and b > 150:
+                pixels[x, y] = (255, 255, 255, 0)
 
     return trim_transparent(image)
 

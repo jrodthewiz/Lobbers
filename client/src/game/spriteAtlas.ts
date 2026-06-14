@@ -21,6 +21,18 @@ export const SPRITES = {
     targetBlue: "ui/target-blue",
     arrowGold: "ui/arrow-gold",
     crateStar: "ui/crate-star",
+    trophyGenerated: "ui/trophy-generated",
+    medalSilverGenerated: "ui/medal-silver-generated",
+    warningGenerated: "ui/warning-generated",
+    readyBadgeGenerated: "ui/ready-badge-generated",
+    powerTokenGenerated: "ui/power-token-generated",
+    pennantRedGenerated: "ui/pennant-red-generated",
+    pennantBlueGenerated: "ui/pennant-blue-generated",
+    startButtonGenerated: "ui/start-button-generated",
+    scorePlaqueGenerated: "ui/score-plaque-generated",
+    speedArrowGenerated: "ui/speed-arrow-generated",
+    bracketLeftGenerated: "ui/bracket-left-generated",
+    bracketRightGenerated: "ui/bracket-right-generated",
   },
   props: {
     barrierStriped: "props/barrier-striped",
@@ -50,6 +62,9 @@ export const SPRITES = {
     smokeSmall: "fx/smoke-small",
     smokeMedium: "fx/smoke-medium",
     smokeLarge: "fx/smoke-large",
+    starburstGoldGenerated: "fx/starburst-gold-generated",
+    starburstBlueGenerated: "fx/starburst-blue-generated",
+    confettiGenerated: "fx/confetti-generated",
   },
 } as const;
 
@@ -72,17 +87,17 @@ export const AMMO_FX_FRAMES: Record<AmmoType, {
 }> = {
   javelin: {
     trail: SPRITES.fx.trailGold,
-    impact: SPRITES.fx.impactJavelin,
+    impact: SPRITES.fx.starburstGoldGenerated,
     smoke: SPRITES.fx.smokeSmall,
   },
   shotput: {
     trail: SPRITES.fx.trailBlue,
-    impact: SPRITES.fx.impactShotput,
+    impact: SPRITES.fx.starburstBlueGenerated,
     smoke: SPRITES.fx.smokeLarge,
   },
   splitter: {
     trail: SPRITES.fx.trailGreen,
-    impact: SPRITES.fx.confettiBurst,
+    impact: SPRITES.fx.confettiGenerated,
     smoke: SPRITES.fx.smokeMedium,
   },
 };

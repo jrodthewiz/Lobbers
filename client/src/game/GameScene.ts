@@ -124,16 +124,21 @@ type ArenaDecorConfig = {
   alpha: number;
   depth: number;
   sway: number;
+  bob: number;
+  phase: number;
 };
 
 const ARENA_DECOR_LAYOUT: ArenaDecorConfig[] = [
-  { frame: SPRITES.props.pennants, x: WORLD.width / 2, y: 118, scale: 1.15, alpha: 0.58, depth: 8, sway: 16 },
-  { frame: SPRITES.props.scoreboard, x: WORLD.width / 2, y: 286, scale: 0.66, alpha: 0.62, depth: 8, sway: 10 },
-  { frame: SPRITES.props.rackJavelin, x: 166, y: WORLD.groundY - 70, scale: 0.68, alpha: 0.92, depth: 11, sway: 7 },
-  { frame: SPRITES.props.rackShotput, x: 350, y: WORLD.groundY - 70, scale: 0.54, alpha: 0.86, depth: 11, sway: 8 },
-  { frame: SPRITES.props.rackDiscs, x: WORLD.width - 344, y: WORLD.groundY - 70, scale: 0.54, alpha: 0.86, depth: 11, sway: 8 },
-  { frame: SPRITES.props.coneStack, x: WORLD.width - 164, y: WORLD.groundY - 56, scale: 0.55, alpha: 0.82, depth: 11, sway: 5 },
-  { frame: SPRITES.props.torch, x: WORLD.width / 2 + 260, y: WORLD.groundY - 70, scale: 0.62, alpha: 0.92, depth: 11, sway: 6 },
+  { frame: SPRITES.props.pennants, x: WORLD.width / 2, y: 118, scale: 1.15, alpha: 0.58, depth: 8, sway: 16, bob: 3, phase: 0.1 },
+  { frame: SPRITES.props.scoreboard, x: WORLD.width / 2, y: 286, scale: 0.66, alpha: 0.62, depth: 8, sway: 10, bob: 1.5, phase: 1.2 },
+  { frame: SPRITES.props.rackJavelin, x: 166, y: WORLD.groundY - 70, scale: 0.68, alpha: 0.92, depth: 11, sway: 7, bob: 0.6, phase: 2.4 },
+  { frame: SPRITES.props.equipmentCrate, x: 62, y: WORLD.groundY - 48, scale: 0.58, alpha: 0.78, depth: 11, sway: 4, bob: 0.5, phase: 0.7 },
+  { frame: SPRITES.props.rackShotput, x: 350, y: WORLD.groundY - 70, scale: 0.54, alpha: 0.86, depth: 11, sway: 8, bob: 0.6, phase: 3.1 },
+  { frame: SPRITES.props.torch, x: WORLD.width / 2 - 332, y: WORLD.groundY - 68, scale: 0.52, alpha: 0.72, depth: 11, sway: 5, bob: 0.7, phase: 4.4 },
+  { frame: SPRITES.props.torch, x: WORLD.width / 2 + 332, y: WORLD.groundY - 68, scale: 0.52, alpha: 0.72, depth: 11, sway: 5, bob: 0.7, phase: 5.2 },
+  { frame: SPRITES.props.rackDiscs, x: WORLD.width - 344, y: WORLD.groundY - 70, scale: 0.54, alpha: 0.86, depth: 11, sway: 8, bob: 0.6, phase: 1.8 },
+  { frame: SPRITES.props.coneStack, x: WORLD.width - 164, y: WORLD.groundY - 56, scale: 0.55, alpha: 0.82, depth: 11, sway: 5, bob: 0.5, phase: 2.7 },
+  { frame: SPRITES.props.equipmentCrate, x: WORLD.width - 62, y: WORLD.groundY - 48, scale: 0.58, alpha: 0.78, depth: 11, sway: 4, bob: 0.5, phase: 3.8 },
 ];
 
 export class GameScene extends Phaser.Scene {
@@ -192,6 +197,7 @@ export class GameScene extends Phaser.Scene {
   override update(time: number): void {
     this.background.update(time);
     this.updateCameraPostFx(time);
+    this.updateArenaDecorSprites(time);
     this.draw();
   }
 
@@ -392,15 +398,39 @@ export class GameScene extends Phaser.Scene {
 
   private drawCourt(): void {
     const g = this.graphics;
-    g.fillStyle(COLORS.court, 0.22);
+    const laneLeft = 80;
+    const laneRight = WORLD.width - 80;
+    const laneWidth = laneRight - laneLeft;
+
+    g.fillStyle(0x1a241d, 0.22);
+    g.fillRect(0, WORLD.groundY - 46, WORLD.width, 46);
+    g.fillStyle(COLORS.court, 0.3);
     g.fillRect(0, WORLD.groundY, WORLD.width, WORLD.height - WORLD.groundY);
-    g.fillStyle(COLORS.lane, 0.84);
-    g.fillRect(80, WORLD.groundY - 18, WORLD.width - 160, 18);
+    g.fillStyle(0x263820, 0.52);
+    g.fillRect(0, WORLD.groundY + 92, WORLD.width, WORLD.height - WORLD.groundY - 92);
+
+    g.fillStyle(0x9fb26b, 0.22);
+    for (let x = laneLeft; x < laneRight; x += 110) {
+      g.fillRect(x, WORLD.groundY - 22, 56, 24);
+    }
+
+    g.fillStyle(COLORS.lane, 0.9);
+    g.fillRect(laneLeft, WORLD.groundY - 18, laneWidth, 18);
+    g.fillStyle(0xf8fafc, 0.18);
+    g.fillRect(laneLeft, WORLD.groundY - 18, laneWidth, 3);
+    g.fillStyle(0x263820, 0.18);
+    g.fillRect(laneLeft, WORLD.groundY - 3, laneWidth, 3);
+
+    g.lineStyle(1, 0xfacc15, 0.5);
+    g.beginPath();
+    g.moveTo(WORLD.width / 2, WORLD.groundY - 40);
+    g.lineTo(WORLD.width / 2, WORLD.groundY + 12);
+    g.strokePath();
 
     g.lineStyle(2, COLORS.line, 0.75);
     g.beginPath();
-    g.moveTo(80, WORLD.groundY);
-    g.lineTo(WORLD.width - 80, WORLD.groundY);
+    g.moveTo(laneLeft, WORLD.groundY);
+    g.lineTo(laneRight, WORLD.groundY);
     g.strokePath();
 
     for (let x = 120; x <= WORLD.width - 120; x += 100) {
@@ -417,6 +447,14 @@ export class GameScene extends Phaser.Scene {
       g.beginPath();
       g.moveTo(0, y);
       g.lineTo(WORLD.width, y);
+      g.strokePath();
+    }
+
+    g.lineStyle(1, 0x0f172a, 0.11);
+    for (let x = -WORLD.height; x < WORLD.width; x += 86) {
+      g.beginPath();
+      g.moveTo(x, WORLD.height);
+      g.lineTo(x + (WORLD.height - WORLD.groundY), WORLD.groundY);
       g.strokePath();
     }
   }
@@ -1165,19 +1203,35 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private updateArenaDecorSprites(time: number): void {
+    this.arenaDecorSprites.forEach((sprite, index) => {
+      const config = ARENA_DECOR_LAYOUT[index];
+      if (!config) return;
+      const wave = Math.sin((time * 0.0011) + config.phase);
+      const flutter = Math.sin((time * 0.0024) + (config.phase * 1.7));
+      const originY = sprite.getData("originY");
+      const baseY = typeof originY === "number" ? originY : sprite.y;
+      sprite
+        .setY(baseY + (wave * config.bob))
+        .setRotation(flutter * config.sway * 0.0009);
+    });
+  }
+
   private applyArenaDecorLayout(seedSource: string): void {
     if (this.arenaDecorSprites.length === 0) return;
     const seed = hashText(seedSource);
     const jitter = (index: number, amount: number): number => (seededUnit(index, seed) - 0.5) * amount;
-    const torchSign = seededUnit(11, seed) > 0.5 ? 1 : -1;
     const layout = [
       { x: WORLD.width / 2 + jitter(1, 150), y: 112 + jitter(2, 18), scale: 1.02 + (seededUnit(3, seed) * 0.24), alpha: 0.5 },
       { x: WORLD.width / 2 + jitter(4, 190), y: 270 + jitter(5, 36), scale: 0.58 + (seededUnit(6, seed) * 0.16), alpha: 0.58 },
-      { x: 138 + jitter(7, 54), y: WORLD.groundY - 66 + jitter(8, 14), scale: 0.62 + (seededUnit(9, seed) * 0.13), alpha: 0.9 },
-      { x: 318 + jitter(10, 70), y: WORLD.groundY - 70 + jitter(12, 12), scale: 0.48 + (seededUnit(13, seed) * 0.14), alpha: 0.84 },
-      { x: WORLD.width - 334 + jitter(14, 70), y: WORLD.groundY - 68 + jitter(15, 14), scale: 0.48 + (seededUnit(16, seed) * 0.14), alpha: 0.84 },
-      { x: WORLD.width - 142 + jitter(17, 62), y: WORLD.groundY - 52 + jitter(18, 12), scale: 0.5 + (seededUnit(19, seed) * 0.12), alpha: 0.8 },
-      { x: (WORLD.width / 2) + (torchSign * (220 + (seededUnit(20, seed) * 160))), y: WORLD.groundY - 68, scale: 0.56 + (seededUnit(21, seed) * 0.12), alpha: 0.9 },
+      { x: 136 + jitter(7, 52), y: WORLD.groundY - 66 + jitter(8, 12), scale: 0.62 + (seededUnit(9, seed) * 0.13), alpha: 0.9 },
+      { x: 72 + jitter(10, 32), y: WORLD.groundY - 42 + jitter(11, 8), scale: 0.52 + (seededUnit(12, seed) * 0.1), alpha: 0.76 },
+      { x: 312 + jitter(13, 62), y: WORLD.groundY - 70 + jitter(14, 12), scale: 0.48 + (seededUnit(15, seed) * 0.14), alpha: 0.84 },
+      { x: WORLD.width / 2 - 336 + jitter(16, 48), y: WORLD.groundY - 66 + jitter(17, 10), scale: 0.48 + (seededUnit(18, seed) * 0.1), alpha: 0.72 },
+      { x: WORLD.width / 2 + 336 + jitter(19, 48), y: WORLD.groundY - 66 + jitter(20, 10), scale: 0.48 + (seededUnit(21, seed) * 0.1), alpha: 0.72 },
+      { x: WORLD.width - 334 + jitter(22, 70), y: WORLD.groundY - 68 + jitter(23, 14), scale: 0.48 + (seededUnit(24, seed) * 0.14), alpha: 0.84 },
+      { x: WORLD.width - 142 + jitter(25, 62), y: WORLD.groundY - 52 + jitter(26, 12), scale: 0.5 + (seededUnit(27, seed) * 0.12), alpha: 0.8 },
+      { x: WORLD.width - 72 + jitter(28, 32), y: WORLD.groundY - 42 + jitter(29, 8), scale: 0.52 + (seededUnit(30, seed) * 0.1), alpha: 0.76 },
     ];
 
     this.arenaDecorSprites.forEach((sprite, index) => {
@@ -1187,6 +1241,7 @@ export class GameScene extends Phaser.Scene {
         .setPosition(item.x, item.y)
         .setScale(item.scale)
         .setAlpha(item.alpha);
+      sprite.setData("originY", item.y);
     });
   }
 
