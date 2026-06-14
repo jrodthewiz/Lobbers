@@ -372,7 +372,7 @@ export class Hud {
       botButtonIcon: SPRITES.ui.targetRed,
       refreshButtonIcon: SPRITES.props.equipmentCrate,
       joinButtonIcon: SPRITES.ui.arrowGold,
-      lobbyListIcon: SPRITES.ui.targetBlue,
+      lobbyListIcon: SPRITES.ui.arrowGold,
       menuLeftProp: SPRITES.props.rackJavelin,
       menuRightProp: SPRITES.props.coneStack,
       blueSideIcon: SPRITES.props.flagBlue,

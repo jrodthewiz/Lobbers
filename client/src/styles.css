@@ -158,9 +158,9 @@ input:focus {
 
 .menu-corner-prop {
   position: absolute;
-  z-index: 2;
+  z-index: 0;
   bottom: 22px;
-  opacity: 0.72;
+  opacity: 0.34;
   filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.45));
 }
 
@@ -170,6 +170,10 @@ input:focus {
 
 .menu-corner-prop-right {
   right: 22px;
+}
+
+.lobby-panel > .menu-corner-prop {
+  z-index: 0;
 }
 
 .brand-row {
@@ -369,7 +373,7 @@ button,
 }
 
 .lobby-list-title {
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 8px;
   min-height: 38px;
   padding: 8px 10px;

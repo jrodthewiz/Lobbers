@@ -14,6 +14,7 @@ OUT_DIR = ROOT / "client" / "src" / "assets"
 SOURCE_DIR = OUT_DIR / "source-sheets"
 ATLAS_IMAGE = OUT_DIR / "lobbers-minimal-atlas.png"
 ATLAS_JSON = OUT_DIR / "lobbers-minimal-atlas.json"
+FAVICON_IMAGE = OUT_DIR / "lobbers-favicon.png"
 
 
 @dataclass(frozen=True)
@@ -147,10 +148,14 @@ def next_power_of_two(value: int) -> int:
 def build_atlas() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     sprites: list[tuple[FrameSource, Image.Image]] = []
+    favicon_sprite: Image.Image | None = None
 
     for frame in FRAMES:
         source = Image.open(SOURCE_DIR / frame.source)
-        sprites.append((frame, remove_checkerboard(source.crop(frame.box))))
+        sprite = remove_checkerboard(source.crop(frame.box))
+        if frame.name == "ui/medal-gold":
+            favicon_sprite = sprite
+        sprites.append((frame, sprite))
 
     padding = 4
     max_width = 1024
@@ -197,6 +202,8 @@ def build_atlas() -> None:
         }
 
     atlas.save(ATLAS_IMAGE)
+    if favicon_sprite is not None:
+        favicon_sprite.resize((64, 64), Image.Resampling.LANCZOS).save(FAVICON_IMAGE)
     ATLAS_JSON.write_text(
         json.dumps(
             {
