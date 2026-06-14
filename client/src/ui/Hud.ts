@@ -139,7 +139,7 @@ export class Hud {
 
     const readyButton = this.byId<HTMLButtonElement>("readyButton");
     if (readyButton) {
-      readyButton.textContent = local?.ready ? "Ready" : "Mark Ready";
+      this.setText("readyButtonLabel", local?.ready ? "Ready" : "Mark Ready");
       readyButton.disabled = context.connecting || local?.ready === true || snapshot.players.length < 2;
     }
   }
@@ -201,7 +201,7 @@ export class Hud {
             <div class="meter"><span id="blueHpBar"></span></div>
           </div>
           <div class="room-chip">
-            <span id="roundState">WAITING</span>
+            <span class="room-state-line"><span class="ui-sprite chip-icon" id="roundStateIcon" aria-hidden="true"></span><span id="roundState">WAITING</span></span>
             <strong id="roomCode">------</strong>
             <small>Your side: <span id="localSide">-</span></small>
           </div>
@@ -221,21 +221,23 @@ export class Hud {
         </div>
 
         <div class="charge-meter">
+          <span class="ui-sprite charge-icon charge-icon-left" id="chargeLeftIcon" aria-hidden="true"></span>
           <span id="chargeFill"></span>
+          <span class="ui-sprite charge-icon charge-icon-right" id="chargeRightIcon" aria-hidden="true"></span>
         </div>
       </section>
 
       <section id="waitingPanel" class="match-panel">
         <span class="ui-sprite panel-icon" id="waitingPanelIcon" aria-hidden="true"></span>
         <p id="waitingText">Waiting for an opponent.</p>
-        <button id="readyButton" type="button">Mark Ready</button>
+        <button id="readyButton" class="panel-command" type="button"><span class="ui-sprite button-icon" id="readyButtonIcon" aria-hidden="true"></span><span id="readyButtonLabel">Mark Ready</span></button>
       </section>
 
       <section id="endedPanel" class="match-panel">
         <span class="ui-sprite panel-icon" id="endedPanelIcon" aria-hidden="true"></span>
         <h2 id="winnerText">Round ended</h2>
         <p id="rematchText">Request a rematch when ready.</p>
-        <button id="rematchButton" type="button">Rematch</button>
+        <button id="rematchButton" class="panel-command" type="button"><span class="ui-sprite button-icon" id="rematchButtonIcon" aria-hidden="true"></span><span>Rematch</span></button>
       </section>
     `;
   }
@@ -332,13 +334,19 @@ export class Hud {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "lobby-row";
+      const icon = document.createElement("span");
+      icon.className = "ui-sprite lobby-row-icon";
+      icon.setAttribute("aria-hidden", "true");
+      this.applySprite(icon, lobby.playerCount >= lobby.maxPlayers ? SPRITES.ui.warningGenerated : SPRITES.ui.readyBadgeGenerated);
       const label = document.createElement("span");
+      label.className = "lobby-row-label";
       const code = document.createElement("strong");
       code.textContent = lobby.code;
       label.append(code, ` ${lobby.hostName}`);
       const count = document.createElement("span");
+      count.className = "lobby-row-count";
       count.textContent = `${lobby.playerCount}/${lobby.maxPlayers}`;
-      button.append(label, count);
+      button.append(icon, label, count);
       button.addEventListener("click", () => this.callbacks?.joinLobby(lobby.code, this.getPlayerName(), "list"));
       container.appendChild(button);
     }
@@ -387,11 +395,16 @@ export class Hud {
       menuRightProp: SPRITES.ui.bracketRightGenerated,
       blueSideIcon: SPRITES.ui.pennantBlueGenerated,
       redSideIcon: SPRITES.ui.pennantRedGenerated,
+      roundStateIcon: SPRITES.ui.scorePlaqueGenerated,
       selectedAmmoIcon: AMMO_UI_FRAMES.javelin,
       lastDistanceIcon: SPRITES.ui.targetBlue,
       bestDistanceIcon: SPRITES.ui.trophyGenerated,
-      waitingPanelIcon: SPRITES.props.pennants,
+      chargeLeftIcon: SPRITES.ui.speedArrowGenerated,
+      chargeRightIcon: SPRITES.ui.powerTokenGenerated,
+      waitingPanelIcon: SPRITES.ui.readyBadgeGenerated,
+      readyButtonIcon: SPRITES.ui.powerTokenGenerated,
       endedPanelIcon: SPRITES.fx.confettiGenerated,
+      rematchButtonIcon: SPRITES.ui.trophyGenerated,
     };
 
     for (const [id, frameName] of Object.entries(spriteById)) {
@@ -427,6 +440,9 @@ export class Hud {
     if (element.classList.contains("button-icon")) return { width: 34, height: 30 };
     if (element.classList.contains("ammo-icon")) return { width: 34, height: 34 };
     if (element.classList.contains("board-icon")) return { width: 30, height: 24 };
+    if (element.classList.contains("chip-icon")) return { width: 36, height: 22 };
+    if (element.classList.contains("charge-icon")) return { width: 28, height: 22 };
+    if (element.classList.contains("lobby-row-icon")) return { width: 40, height: 26 };
     if (element.classList.contains("side-flag")) return { width: 26, height: 30 };
     if (element.classList.contains("metric-icon")) return { width: 18, height: 18 };
     if (element.classList.contains("pill-icon")) return { width: 56, height: 26 };

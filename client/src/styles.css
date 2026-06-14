@@ -472,9 +472,9 @@ button,
 }
 
 .lobby-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
   padding: 9px 10px;
   border: 2px solid rgba(255, 255, 255, 0.08);
@@ -486,8 +486,31 @@ button,
   text-align: left;
 }
 
+.lobby-row-icon {
+  filter:
+    drop-shadow(0 2px 5px rgba(0, 0, 0, 0.5))
+    drop-shadow(0 0 8px rgba(250, 204, 21, 0.12));
+}
+
+.lobby-row-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .lobby-row strong {
   color: #ffe66d;
+}
+
+.lobby-row-count {
+  min-width: 46px;
+  padding: 4px 6px;
+  border: 1px solid rgba(250, 204, 21, 0.24);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.34);
+  color: #ffe66d;
+  text-align: center;
 }
 
 .empty-list {
@@ -584,7 +607,7 @@ button,
 }
 
 .meter span,
-.charge-meter span {
+#chargeFill {
   display: block;
   width: 0;
   height: 100%;
@@ -610,6 +633,13 @@ button,
   background:
     linear-gradient(180deg, rgba(250, 204, 21, 0.08), rgba(0, 0, 0, 0.16)),
     rgba(5, 10, 10, 0.9);
+}
+
+.room-state-line {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 
 .room-chip span {
@@ -736,15 +766,36 @@ button,
   transform: translateX(-50%);
   width: min(360px, 70vw);
   height: 10px;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.35);
 }
 
-.charge-meter span {
+#chargeFill {
+  overflow: hidden;
+  border-radius: 999px;
   background: linear-gradient(90deg, var(--green), var(--cyan), var(--gold));
   box-shadow: 0 0 18px rgba(250, 204, 21, 0.42);
+}
+
+.charge-icon {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  filter:
+    drop-shadow(0 2px 5px rgba(0, 0, 0, 0.5))
+    drop-shadow(0 0 10px rgba(250, 204, 21, 0.22));
+}
+
+.charge-icon-left {
+  left: -34px;
+  transform: translateY(-50%);
+}
+
+.charge-icon-right {
+  right: -34px;
+  transform: translateY(-50%);
 }
 
 .match-panel {
@@ -761,6 +812,21 @@ button,
 
 .panel-icon {
   margin: 0 auto 8px;
+}
+
+.panel-command {
+  justify-content: center;
+  gap: 8px;
+  min-width: 150px;
+  padding: 7px 12px;
+  border: 2px solid rgba(250, 204, 21, 0.32);
+  border-radius: 5px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(0, 0, 0, 0.14)),
+    linear-gradient(180deg, #3e4652, #252b35);
+  color: #fff3d0;
+  font-weight: 900;
+  text-transform: uppercase;
 }
 
 .match-panel h2,
