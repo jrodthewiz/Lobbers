@@ -170,7 +170,7 @@ export class Hud {
             <span>Competitor Entry</span>
           </div>
           <label>
-            Name
+            <span class="form-label-line"><span class="ui-sprite form-label-icon" id="nameLabelIcon" aria-hidden="true"></span><span>Name</span></span>
             <input id="playerNameInput" maxlength="18" autocomplete="off" value="Lobber" />
           </label>
           <div class="button-row">
@@ -179,7 +179,7 @@ export class Hud {
             <button id="refreshButton" type="button"><span class="ui-sprite button-icon" id="refreshButtonIcon" aria-hidden="true"></span><span>Browse Lobbies</span></button>
           </div>
           <label>
-            Lobby code
+            <span class="form-label-line"><span class="ui-sprite form-label-icon" id="codeLabelIcon" aria-hidden="true"></span><span>Lobby code</span></span>
             <input id="joinCodeInput" maxlength="8" autocomplete="off" placeholder="ABC123" />
           </label>
           <button id="joinButton" class="wide-command" type="button"><span class="ui-sprite button-icon" id="joinButtonIcon" aria-hidden="true"></span><span>Join By Code</span></button>
@@ -196,6 +196,7 @@ export class Hud {
       <section id="activeHud" class="active-hud">
         <div class="top-strip">
           <div class="player-card blue-side">
+            <span class="ui-sprite player-card-badge blue-card-badge" id="blueCardBadge" aria-hidden="true"></span>
             <span class="player-name-line"><span class="ui-sprite side-flag" id="blueSideIcon" aria-hidden="true"></span><span id="blueName">Waiting</span></span>
             <strong id="blueHpText">0 HP</strong>
             <div class="meter"><span id="blueHpBar"></span></div>
@@ -206,6 +207,7 @@ export class Hud {
             <small>Your side: <span id="localSide">-</span></small>
           </div>
           <div class="player-card red-side">
+            <span class="ui-sprite player-card-badge red-card-badge" id="redCardBadge" aria-hidden="true"></span>
             <span class="player-name-line red-name-line"><span id="redName">Waiting</span><span class="ui-sprite side-flag" id="redSideIcon" aria-hidden="true"></span></span>
             <strong id="redHpText">0 HP</strong>
             <div class="meter"><span id="redHpBar"></span></div>
@@ -228,12 +230,16 @@ export class Hud {
       </section>
 
       <section id="waitingPanel" class="match-panel">
+        <span class="ui-sprite popup-corner popup-corner-left" id="waitingCornerLeft" aria-hidden="true"></span>
+        <span class="ui-sprite popup-corner popup-corner-right" id="waitingCornerRight" aria-hidden="true"></span>
         <span class="ui-sprite panel-icon" id="waitingPanelIcon" aria-hidden="true"></span>
         <p id="waitingText">Waiting for an opponent.</p>
         <button id="readyButton" class="panel-command" type="button"><span class="ui-sprite button-icon" id="readyButtonIcon" aria-hidden="true"></span><span id="readyButtonLabel">Mark Ready</span></button>
       </section>
 
       <section id="endedPanel" class="match-panel">
+        <span class="ui-sprite popup-corner popup-corner-left" id="endedCornerLeft" aria-hidden="true"></span>
+        <span class="ui-sprite popup-corner popup-corner-right" id="endedCornerRight" aria-hidden="true"></span>
         <span class="ui-sprite panel-icon" id="endedPanelIcon" aria-hidden="true"></span>
         <h2 id="winnerText">Round ended</h2>
         <p id="rematchText">Request a rematch when ready.</p>
@@ -325,7 +331,13 @@ export class Hud {
     if (lobbies.length === 0) {
       const empty = document.createElement("p");
       empty.className = "empty-list";
-      empty.textContent = "No open lobbies yet.";
+      const emptyIcon = document.createElement("span");
+      emptyIcon.className = "ui-sprite empty-list-icon";
+      emptyIcon.setAttribute("aria-hidden", "true");
+      this.applySprite(emptyIcon, SPRITES.ui.warningGenerated);
+      const emptyText = document.createElement("span");
+      emptyText.textContent = "No open lobbies yet.";
+      empty.append(emptyIcon, emptyText);
       container.appendChild(empty);
       return;
     }
@@ -385,6 +397,8 @@ export class Hud {
     const spriteById: Record<string, string> = {
       brandMark: SPRITES.ui.trophyGenerated,
       statusIcon: SPRITES.ui.readyBadgeGenerated,
+      nameLabelIcon: SPRITES.ui.medalSilverGenerated,
+      codeLabelIcon: SPRITES.ui.scorePlaqueGenerated,
       hostButtonIcon: SPRITES.ui.scorePlaqueGenerated,
       botButtonIcon: SPRITES.ui.targetRed,
       refreshButtonIcon: SPRITES.ui.speedArrowGenerated,
@@ -393,8 +407,14 @@ export class Hud {
       entryBoardIcon: SPRITES.ui.medalSilverGenerated,
       menuLeftProp: SPRITES.ui.bracketLeftGenerated,
       menuRightProp: SPRITES.ui.bracketRightGenerated,
+      waitingCornerLeft: SPRITES.ui.bracketLeftGenerated,
+      waitingCornerRight: SPRITES.ui.bracketRightGenerated,
+      endedCornerLeft: SPRITES.ui.bracketLeftGenerated,
+      endedCornerRight: SPRITES.ui.bracketRightGenerated,
       blueSideIcon: SPRITES.ui.pennantBlueGenerated,
       redSideIcon: SPRITES.ui.pennantRedGenerated,
+      blueCardBadge: SPRITES.ui.pennantBlueGenerated,
+      redCardBadge: SPRITES.ui.pennantRedGenerated,
       roundStateIcon: SPRITES.ui.scorePlaqueGenerated,
       selectedAmmoIcon: AMMO_UI_FRAMES.javelin,
       lastDistanceIcon: SPRITES.ui.targetBlue,
@@ -437,12 +457,16 @@ export class Hud {
     if (element.classList.contains("brand-mark")) return { width: 64, height: 58 };
     if (element.classList.contains("menu-corner-prop")) return { width: 112, height: 92 };
     if (element.classList.contains("panel-icon")) return { width: 38, height: 30 };
+    if (element.classList.contains("popup-corner")) return { width: 44, height: 38 };
     if (element.classList.contains("button-icon")) return { width: 34, height: 30 };
     if (element.classList.contains("ammo-icon")) return { width: 34, height: 34 };
     if (element.classList.contains("board-icon")) return { width: 30, height: 24 };
     if (element.classList.contains("chip-icon")) return { width: 36, height: 22 };
     if (element.classList.contains("charge-icon")) return { width: 28, height: 22 };
     if (element.classList.contains("lobby-row-icon")) return { width: 40, height: 26 };
+    if (element.classList.contains("empty-list-icon")) return { width: 56, height: 36 };
+    if (element.classList.contains("form-label-icon")) return { width: 24, height: 22 };
+    if (element.classList.contains("player-card-badge")) return { width: 42, height: 40 };
     if (element.classList.contains("side-flag")) return { width: 26, height: 30 };
     if (element.classList.contains("metric-icon")) return { width: 18, height: 18 };
     if (element.classList.contains("pill-icon")) return { width: 56, height: 26 };

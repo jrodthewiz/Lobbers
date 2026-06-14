@@ -338,6 +338,18 @@ button,
   text-transform: uppercase;
 }
 
+.form-label-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.form-label-icon {
+  filter:
+    drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45))
+    drop-shadow(0 0 8px rgba(250, 204, 21, 0.1));
+}
+
 .lobby-controls input {
   min-height: 44px;
   border: 2px solid rgba(255, 230, 109, 0.18);
@@ -518,6 +530,8 @@ button,
   min-height: 132px;
   display: grid;
   place-items: center;
+  align-content: center;
+  gap: 8px;
   padding: 14px;
   border: 2px dashed rgba(250, 204, 21, 0.23);
   border-radius: 6px;
@@ -529,6 +543,12 @@ button,
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(0, 0, 0, 0.08)),
     repeating-linear-gradient(90deg, rgba(255, 230, 109, 0.04) 0 2px, transparent 2px 14px);
+}
+
+.empty-list-icon {
+  filter:
+    drop-shadow(0 3px 7px rgba(0, 0, 0, 0.5))
+    drop-shadow(0 0 12px rgba(250, 204, 21, 0.18));
 }
 
 .active-hud {
@@ -560,12 +580,35 @@ button,
 }
 
 .player-card {
+  position: relative;
+  overflow: hidden;
   display: grid;
   gap: 7px;
   padding: 10px;
 }
 
+.player-card-badge {
+  position: absolute;
+  top: 8px;
+  z-index: 0;
+  opacity: 0.32;
+  filter:
+    drop-shadow(0 4px 8px rgba(0, 0, 0, 0.42))
+    saturate(1.12);
+  pointer-events: none;
+}
+
+.blue-card-badge {
+  right: 9px;
+}
+
+.red-card-badge {
+  left: 9px;
+}
+
 .player-name-line {
+  position: relative;
+  z-index: 1;
   min-width: 0;
   gap: 6px;
 }
@@ -580,6 +623,8 @@ button,
 }
 
 .player-card strong {
+  position: relative;
+  z-index: 1;
   font-size: 18px;
   line-height: 1;
 }
@@ -808,6 +853,24 @@ button,
   padding: 14px;
   text-align: center;
   border: 2px solid rgba(250, 204, 21, 0.24);
+}
+
+.popup-corner {
+  position: absolute;
+  top: -18px;
+  opacity: 0.92;
+  filter:
+    drop-shadow(0 5px 10px rgba(0, 0, 0, 0.45))
+    saturate(1.08);
+  pointer-events: none;
+}
+
+.popup-corner-left {
+  left: -20px;
+}
+
+.popup-corner-right {
+  right: -20px;
 }
 
 .panel-icon {
