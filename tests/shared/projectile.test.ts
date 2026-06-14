@@ -5,7 +5,7 @@ import {
   findEarliestProjectileImpact,
   integrateBallisticProjectile,
 } from "../../shared/game/ballistics";
-import { WORLD } from "../../shared/game/constants";
+import { CHARGE, SIDE_SIGN, WORLD } from "../../shared/game/constants";
 import {
   buildLaunchVelocity,
   circleIntersectsRect,
@@ -37,6 +37,32 @@ describe("shared projectile math", () => {
     const slow = buildLaunchVelocity(ammo, 120, aim);
     const fast = buildLaunchVelocity(ammo, 1600, aim);
     expect(Math.hypot(fast.x, fast.y)).toBeGreaterThan(Math.hypot(slow.x, slow.y));
+  });
+
+  it("keeps ammo flight profiles distinct", () => {
+    const aim = normalizeAimForSide({ aimX: 1, aimY: -0.42 }, "blue");
+    const integrateFor = (ammoType: keyof typeof AMMO_DEFINITIONS) => {
+      const ammo = AMMO_DEFINITIONS[ammoType];
+      const velocity = buildLaunchVelocity(ammo, CHARGE.maxMs, aim);
+      let current = { x: 0, y: 400, vx: velocity.x, vy: velocity.y, radius: ammo.radius };
+      for (let i = 0; i < 45; i += 1) {
+        current = integrateBallisticProjectile(
+          current,
+          1 / 60,
+          buildProjectilePhysicsProfile(ammo.gravityScale, ammo.dragPerSecond),
+        );
+      }
+      return current;
+    };
+
+    const javelin = integrateFor("javelin");
+    const shotput = integrateFor("shotput");
+    const splitter = integrateFor("splitter");
+
+    expect(javelin.x).toBeGreaterThan(splitter.x);
+    expect(splitter.x).toBeGreaterThan(shotput.x);
+    expect(shotput.y).toBeGreaterThan(splitter.y);
+    expect(splitter.y).toBeGreaterThan(javelin.y);
   });
 
   it("integrates downward gravity in screen coordinates", () => {
@@ -81,6 +107,26 @@ describe("shared projectile math", () => {
     const hand = resolveThrowHandPosition(170, WORLD.groundY - WORLD.tankHeight, "blue", aim);
     expect(hand.x).toBeGreaterThan(shoulder.x);
     expect(hand.y).toBeLessThan(shoulder.y);
+  });
+
+  it("aligns the throw hand exactly along normalized aim for both sides", () => {
+    const reach = WORLD.armUpperLength + WORLD.armForearmLength;
+    const cases = [
+      { side: "blue" as const, aim: normalizeAimForSide({ aimX: 0.72, aimY: -0.48 }, "blue") },
+      { side: "red" as const, aim: normalizeAimForSide({ aimX: -0.58, aimY: -0.62 }, "red") },
+    ];
+
+    for (const entry of cases) {
+      const shoulder = resolveShoulderPosition(800, WORLD.groundY - WORLD.tankHeight, entry.side);
+      const hand = resolveThrowHandPosition(800, WORLD.groundY - WORLD.tankHeight, entry.side, entry.aim);
+      const dx = hand.x - shoulder.x;
+      const dy = hand.y - shoulder.y;
+
+      expect(Math.hypot(dx, dy)).toBeCloseTo(reach, 5);
+      expect(dx / reach).toBeCloseTo(entry.aim.x, 5);
+      expect(dy / reach).toBeCloseTo(entry.aim.y, 5);
+      expect(dx * SIDE_SIGN[entry.side]).toBeGreaterThan(0);
+    }
   });
 
   it("checks circle and rectangle collision", () => {

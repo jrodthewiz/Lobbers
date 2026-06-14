@@ -52,6 +52,10 @@ test("practice controls and combat smoke", async ({ page }) => {
   const jumpY = Number(await page.locator("#hud-root").evaluate((element) => element.dataset.localY ?? "0"));
   expect(jumpY).toBeLessThan(groundY);
 
+  await page.getByRole("button", { name: "Splitter" }).click();
+  await expect(page.locator("#selectedAmmo")).toHaveText("Splitter");
+  await expect(page.locator("#hud-root")).toHaveAttribute("data-selected-ammo", "splitter");
+
   const canvasBox = await page.locator("canvas").boundingBox();
   expect(canvasBox).not.toBeNull();
   if (!canvasBox) return;
@@ -62,8 +66,8 @@ test("practice controls and combat smoke", async ({ page }) => {
 
   await page.waitForFunction(() => {
     const hud = document.querySelector<HTMLElement>("#hud-root");
-    const projectileCount = Number(hud?.dataset.projectileCount ?? "0");
+    const projectileAmmoTypes = hud?.dataset.projectileAmmoTypes ?? "";
     const lastDistance = Number(hud?.dataset.localLastDistance ?? "0");
-    return projectileCount > 0 || lastDistance > 0;
+    return projectileAmmoTypes.split(",").includes("splitter") || lastDistance > 0;
   });
 });

@@ -1,7 +1,19 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Client } from "colyseus";
 import { ThrowRoom } from "../../server/rooms/ThrowRoom";
-import type { ChargeStartPayload, MoveInputPayload, SetReadyPayload, ThrowReleasePayload } from "../../shared/game/types";
+import type {
+  ChargeStartPayload,
+  MoveInputPayload,
+  SelectAmmoPayload,
+  SetReadyPayload,
+  ThrowReleasePayload,
+} from "../../shared/game/types";
+import { AMMO_DEFINITIONS, AMMO_TYPES, getAmmoDefinition } from "../../shared/game/ammo";
+import {
+  buildLaunchVelocity,
+  normalizeAimForSide,
+  resolveThrowHandPosition,
+} from "../../shared/game/math";
 
 type RoomTestHooks = {
   setPatchRate: (milliseconds: number) => void;
@@ -18,6 +30,7 @@ type RoomPrivateHandlers = {
   handleSetReady: (client: Client, payload: SetReadyPayload) => void;
   handleChargeStart: (client: Client, payload: ChargeStartPayload) => void;
   handleThrowRelease: (client: Client, payload: ThrowReleasePayload) => void;
+  handleSelectAmmo: (client: Client, payload: SelectAmmoPayload) => void;
   handleMoveInput: (client: Client, payload: MoveInputPayload) => void;
   update: (dtSeconds: number) => void;
 };
@@ -130,6 +143,91 @@ describe("ThrowRoom", () => {
 
     expect(room.state.players.get(host.sessionId)?.throwSeq).toBe(1);
     expect(room.state.projectiles.size).toBeGreaterThan(0);
+  });
+
+  it.each([...AMMO_TYPES])("spawns requested %s ammo from a charged release", (ammoType) => {
+    const room = createRoom();
+    const host = mockClient("host");
+    const handlers = privateHandlers(room);
+    room.onJoin(host, { playerName: "Host" });
+    joinGuest(room, mockClient("guest"));
+    room.state.roundState = "active";
+
+    handlers.handleSelectAmmo(host, { ammoType });
+    handlers.handleChargeStart(host, { ammoType });
+    handlers.handleThrowRelease(host, { aimX: 1, aimY: -0.42 });
+
+    const projectile = Array.from(room.state.projectiles.values())[0];
+    expect(room.state.players.get(host.sessionId)?.selectedAmmo).toBe(ammoType);
+    expect(projectile?.ammoType).toBe(ammoType);
+    expect(projectile?.radius).toBe(AMMO_DEFINITIONS[ammoType].radius);
+    expect(Math.hypot(projectile?.vx ?? 0, projectile?.vy ?? 0)).toBeGreaterThan(0);
+  });
+
+  it("splits splitter ammo into fragment projectiles", () => {
+    const room = createRoom();
+    const host = mockClient("host");
+    const handlers = privateHandlers(room);
+    room.onJoin(host, { playerName: "Host" });
+    joinGuest(room, mockClient("guest"));
+    room.state.roundState = "active";
+
+    handlers.handleChargeStart(host, { ammoType: "splitter" });
+    handlers.handleThrowRelease(host, { aimX: 1, aimY: -0.8 });
+
+    let fragmentCount = 0;
+    for (let i = 0; i < 140; i += 1) {
+      handlers.update(1 / 60);
+      fragmentCount = Array.from(room.state.projectiles.values())
+        .filter((projectile) => (
+          projectile.ammoType === "splitter"
+          && projectile.radius === AMMO_DEFINITIONS.splitter.fragmentRadius
+        ))
+        .length;
+      if (fragmentCount > 0) break;
+    }
+
+    expect(fragmentCount).toBe(AMMO_DEFINITIONS.splitter.fragmentCount);
+  });
+
+  it("aligns released projectile spawn and velocity with normalized mouse aim", () => {
+    const room = createRoom();
+    const host = mockClient("host");
+    const handlers = privateHandlers(room);
+    room.onJoin(host, { playerName: "Host" });
+    joinGuest(room, mockClient("guest"));
+    room.state.roundState = "active";
+
+    const player = room.state.players.get(host.sessionId);
+    if (!player) throw new Error("Expected host player to exist");
+
+    const chargeMs = 900;
+    const rawAim = { aimX: 0.46, aimY: -0.72 };
+    const aim = normalizeAimForSide(rawAim, "blue");
+    const ammo = getAmmoDefinition("shotput");
+    const expectedHand = resolveThrowHandPosition(player.x, player.y, "blue", aim);
+    const expectedVelocity = buildLaunchVelocity(ammo, chargeMs, aim);
+    const nowSpy = vi.spyOn(Date, "now");
+
+    try {
+      nowSpy.mockReturnValue(1_700_000_000_000);
+      handlers.handleChargeStart(host, { ammoType: ammo.type });
+      nowSpy.mockReturnValue(1_700_000_000_000 + chargeMs);
+      handlers.handleThrowRelease(host, rawAim);
+    } finally {
+      nowSpy.mockRestore();
+    }
+
+    const projectile = Array.from(room.state.projectiles.values())[0];
+    expect(projectile).toBeDefined();
+    if (!projectile) throw new Error("Expected release to spawn a projectile");
+
+    expect(projectile.x).toBeCloseTo(expectedHand.x, 5);
+    expect(projectile.y).toBeCloseTo(expectedHand.y, 5);
+    expect(projectile.vx).toBeCloseTo(expectedVelocity.x, 5);
+    expect(projectile.vy).toBeCloseTo(expectedVelocity.y, 5);
+    expect(player.aimX).toBeCloseTo(aim.x, 5);
+    expect(player.aimY).toBeCloseTo(aim.y, 5);
   });
 
   it("moves a human tank from move input", () => {

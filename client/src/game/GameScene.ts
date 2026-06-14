@@ -14,6 +14,7 @@ import {
   resolveThrowHandPosition,
 } from "../../../shared/game/math";
 import type { AmmoType, Side, Vec2 } from "../../../shared/game/types";
+import { ProceduralBackground } from "./ProceduralBackground";
 import type { GameSnapshot, PlayerView } from "./viewModel";
 import { EMPTY_SNAPSHOT } from "./viewModel";
 
@@ -33,7 +34,6 @@ type ArmPose = {
 };
 
 const COLORS = {
-  skyTop: 0x111827,
   court: 0x42513a,
   lane: 0x7b8f59,
   line: 0xd7e6b0,
@@ -62,6 +62,7 @@ const colorForAmmo = (ammoType: AmmoType): number => {
 };
 
 export class GameScene extends Phaser.Scene {
+  private background!: ProceduralBackground;
   private graphics!: Phaser.GameObjects.Graphics;
   private snapshot: GameSnapshot = EMPTY_SNAPSHOT;
   private localSessionId = "";
@@ -77,14 +78,17 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.background = new ProceduralBackground(this);
+    this.background.create();
     this.graphics = this.add.graphics();
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => this.handlePointerDown(pointer));
     this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => this.handlePointerMove(pointer));
-    this.input.on("pointerup", () => this.handlePointerUp());
+    this.input.on("pointerup", (pointer: Phaser.Input.Pointer) => this.handlePointerUp(pointer));
     this.input.keyboard?.on("keydown-ESC", () => this.cancelCharge());
   }
 
-  override update(): void {
+  override update(time: number): void {
+    this.background.update(time);
     this.draw();
   }
 
@@ -116,8 +120,9 @@ export class GameScene extends Phaser.Scene {
     this.updatePointerAim(pointer);
   }
 
-  private handlePointerUp(): void {
+  private handlePointerUp(pointer: Phaser.Input.Pointer): void {
     if (this.chargingStartedAtMs === null) return;
+    this.updatePointerAim(pointer);
     const aim = this.pointerAim;
     this.chargingStartedAtMs = null;
     this.callbacks?.throwRelease(aim);
@@ -171,11 +176,9 @@ export class GameScene extends Phaser.Scene {
 
   private drawCourt(): void {
     const g = this.graphics;
-    g.fillStyle(COLORS.skyTop, 1);
-    g.fillRect(0, 0, WORLD.width, WORLD.height);
-    g.fillStyle(COLORS.court, 1);
+    g.fillStyle(COLORS.court, 0.22);
     g.fillRect(0, WORLD.groundY, WORLD.width, WORLD.height - WORLD.groundY);
-    g.fillStyle(COLORS.lane, 1);
+    g.fillStyle(COLORS.lane, 0.84);
     g.fillRect(80, WORLD.groundY - 18, WORLD.width - 160, 18);
 
     g.lineStyle(2, COLORS.line, 0.75);
@@ -258,7 +261,7 @@ export class GameScene extends Phaser.Scene {
 
     const aim = this.resolvePlayerAim(player);
     const armPose = this.resolveArmPose(player, aim);
-    this.drawThrowingArm(player, armPose, lightColor);
+    this.drawThrowingArm(player, armPose, lightColor, aim);
 
     if (player.hp <= 0) {
       g.lineStyle(3, 0xffffff, 0.7);
@@ -284,29 +287,31 @@ export class GameScene extends Phaser.Scene {
     const chargeRatio = observedCharging ? resolveChargeRatio(chargeMs) : 0;
     const aimAngle = Math.atan2(aim.y, aim.x);
     const idleAngle = Math.atan2(-0.48, sideSign * 0.88);
-    const foldedAngle = idleAngle - (sideSign * (0.88 + (chargeRatio * 0.78)));
     const throwStart = this.throwAnimationStartedAtBySessionId.get(player.sessionId) ?? null;
     const releaseAgeMs = throwStart === null ? Number.POSITIVE_INFINITY : now - throwStart;
     const releaseProgress = releaseAgeMs <= 180 ? clamp01(releaseAgeMs / 180) : 0;
     const recoverProgress = releaseAgeMs > 180 && releaseAgeMs <= 520 ? clamp01((releaseAgeMs - 180) / 340) : 0;
     const easedRelease = easeOutCubic(releaseProgress);
     const easedRecover = easeOutCubic(recoverProgress);
-    const baseAngle = releaseAgeMs <= 180
-      ? lerp(foldedAngle, aimAngle, easedRelease)
-      : (releaseAgeMs <= 520 ? lerp(aimAngle, idleAngle, easedRecover) : (observedCharging ? foldedAngle : idleAngle));
-    const bend = observedCharging && releaseAgeMs > 180
-      ? 0.8 + (chargeRatio * 0.45)
-      : 0.22;
+    const activelyAiming = observedCharging || releaseAgeMs <= 180;
+    const baseAngle = activelyAiming
+      ? aimAngle
+      : (releaseAgeMs <= 520 ? lerp(aimAngle, idleAngle, easedRecover) : idleAngle);
+    const bend = activelyAiming
+      ? 0
+      : (releaseAgeMs <= 520 ? lerp(0, 0.22, easedRecover) : 0.22);
     const upperAngle = baseAngle - (sideSign * bend * 0.62);
     const forearmAngle = baseAngle + (sideSign * bend * 0.88);
     const elbow = {
       x: shoulder.x + (Math.cos(upperAngle) * WORLD.armUpperLength),
       y: shoulder.y + (Math.sin(upperAngle) * WORLD.armUpperLength),
     };
-    const hand = {
-      x: elbow.x + (Math.cos(forearmAngle) * WORLD.armForearmLength),
-      y: elbow.y + (Math.sin(forearmAngle) * WORLD.armForearmLength),
-    };
+    const hand = activelyAiming
+      ? resolveThrowHandPosition(player.x, player.y, player.side, aim)
+      : {
+          x: elbow.x + (Math.cos(forearmAngle) * WORLD.armForearmLength),
+          y: elbow.y + (Math.sin(forearmAngle) * WORLD.armForearmLength),
+        };
     const spinRate = observedCharging ? 0.036 : 0.006;
     return {
       shoulder,
@@ -318,11 +323,12 @@ export class GameScene extends Phaser.Scene {
     };
   }
 
-  private drawThrowingArm(player: PlayerView, pose: ArmPose, lightColor: number): void {
+  private drawThrowingArm(player: PlayerView, pose: ArmPose, lightColor: number, aim: Vec2): void {
     const g = this.graphics;
     const armColor = player.connected ? lightColor : 0x94a3b8;
     const metalColor = 0xd8dee9;
-    const ammo = getAmmoDefinition(player.selectedAmmo);
+    const heldAmmoType = player.sessionId === this.localSessionId ? this.selectedAmmo : player.selectedAmmo;
+    const heldAmmo = getAmmoDefinition(heldAmmoType);
 
     g.lineStyle(10, armColor, player.connected ? 1 : 0.45);
     g.beginPath();
@@ -344,8 +350,15 @@ export class GameScene extends Phaser.Scene {
     g.fillCircle(pose.hand.x, pose.hand.y, 6);
 
     if (player.charging || (player.sessionId === this.localSessionId && this.chargingStartedAtMs !== null)) {
-      g.fillStyle(colorForAmmo(player.sessionId === this.localSessionId ? this.selectedAmmo : player.selectedAmmo), 0.95);
-      g.fillCircle(pose.hand.x, pose.hand.y, Math.max(5, ammo.radius));
+      this.drawAmmoShape(
+        heldAmmoType,
+        pose.hand.x,
+        pose.hand.y,
+        Math.max(5, heldAmmo.radius),
+        aim.x,
+        aim.y,
+        0.96,
+      );
     }
 
     if (pose.releaseProgress > 0) {
@@ -381,12 +394,85 @@ export class GameScene extends Phaser.Scene {
   private drawProjectiles(): void {
     const g = this.graphics;
     for (const projectile of this.snapshot.projectiles) {
-      g.fillStyle(colorForAmmo(projectile.ammoType), projectile.alive ? 1 : 0.4);
-      g.fillCircle(projectile.x, projectile.y, projectile.radius);
-      g.lineStyle(2, colorForAmmo(projectile.ammoType), 0.35);
+      const alpha = projectile.alive ? 1 : 0.4;
+      const color = colorForAmmo(projectile.ammoType);
+      g.lineStyle(projectile.ammoType === "javelin" ? 2 : 3, color, 0.28);
       g.beginPath();
       g.moveTo(projectile.x, projectile.y);
       g.lineTo(projectile.x - (projectile.vx * 0.045), projectile.y - (projectile.vy * 0.045));
+      g.strokePath();
+      this.drawAmmoShape(
+        projectile.ammoType,
+        projectile.x,
+        projectile.y,
+        projectile.radius,
+        projectile.vx,
+        projectile.vy,
+        alpha,
+      );
+    }
+  }
+
+  private drawAmmoShape(
+    ammoType: AmmoType,
+    x: number,
+    y: number,
+    radius: number,
+    vx: number,
+    vy: number,
+    alpha: number,
+  ): void {
+    const g = this.graphics;
+    const color = colorForAmmo(ammoType);
+    const angle = Math.atan2(vy, vx);
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+
+    if (ammoType === "javelin") {
+      const length = Math.max(28, radius * 7);
+      const backX = x - (cos * length * 0.46);
+      const backY = y - (sin * length * 0.46);
+      const tipX = x + (cos * length * 0.54);
+      const tipY = y + (sin * length * 0.54);
+      const wingX = x - (cos * length * 0.18);
+      const wingY = y - (sin * length * 0.18);
+      g.lineStyle(Math.max(3, radius * 0.7), color, alpha);
+      g.beginPath();
+      g.moveTo(backX, backY);
+      g.lineTo(tipX, tipY);
+      g.strokePath();
+      g.fillStyle(0xfef3c7, alpha);
+      g.fillTriangle(
+        tipX,
+        tipY,
+        wingX + (-sin * radius * 1.6),
+        wingY + (cos * radius * 1.6),
+        wingX + (sin * radius * 1.6),
+        wingY + (-cos * radius * 1.6),
+      );
+      return;
+    }
+
+    if (ammoType === "shotput") {
+      g.fillStyle(color, alpha);
+      g.fillCircle(x, y, radius);
+      g.lineStyle(3, 0x475569, alpha * 0.7);
+      g.strokeCircle(x, y, radius);
+      g.fillStyle(0xffffff, alpha * 0.5);
+      g.fillCircle(x - (radius * 0.32), y - (radius * 0.36), Math.max(2, radius * 0.24));
+      return;
+    }
+
+    g.fillStyle(color, alpha);
+    g.fillCircle(x, y, radius);
+    g.lineStyle(2, 0xecfdf5, alpha * 0.78);
+    g.strokeCircle(x, y, radius + 1);
+    for (let i = 0; i < 3; i += 1) {
+      const spoke = angle + ((Math.PI * 2 * i) / 3);
+      g.lineStyle(2, 0x064e3b, alpha * 0.7);
+      g.beginPath();
+      g.moveTo(x, y);
+      g.lineTo(x + (Math.cos(spoke) * radius * 0.9), y + (Math.sin(spoke) * radius * 0.9));
       g.strokePath();
     }
   }

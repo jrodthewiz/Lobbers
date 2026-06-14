@@ -33,6 +33,8 @@ const hpPercent = (player: PlayerView | null): number => (
 export class Hud {
   private readonly root: HTMLElement;
   private callbacks: HudCallbacks | null = null;
+  private ammoButtonsInitialized = false;
+  private lobbyListKey = "";
 
   constructor(root: HTMLElement) {
     this.root = root;
@@ -55,6 +57,10 @@ export class Hud {
     this.root.dataset.localY = String(Math.round(local?.y ?? 0));
     this.root.dataset.localGrounded = String(local?.grounded === true);
     this.root.dataset.projectileCount = String(snapshot.projectiles.length);
+    this.root.dataset.projectileAmmoTypes = snapshot.projectiles
+      .map((projectile) => projectile.ammoType)
+      .join(",");
+    this.root.dataset.selectedAmmo = context.selectedAmmo;
     this.root.dataset.localLastDistance = String(local?.lastThrowDistance ?? 0);
     this.root.dataset.blueHp = String(blue?.hp ?? 0);
     this.root.dataset.redHp = String(red?.hp ?? 0);
@@ -205,21 +211,39 @@ export class Hud {
   private renderAmmoButtons(selectedAmmo: AmmoType): void {
     const container = this.byId("ammoButtons");
     if (!container) return;
-    container.innerHTML = "";
+
+    if (!this.ammoButtonsInitialized || container.childElementCount !== AMMO_TYPES.length) {
+      container.replaceChildren();
+      for (const ammoType of AMMO_TYPES) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "ammo-button";
+        button.dataset.ammoType = ammoType;
+        button.textContent = AMMO_DEFINITIONS[ammoType].label;
+        button.addEventListener("click", () => this.callbacks?.selectAmmo(ammoType));
+        container.appendChild(button);
+      }
+      this.ammoButtonsInitialized = true;
+    }
+
     for (const ammoType of AMMO_TYPES) {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = ammoType === selectedAmmo ? "ammo-button selected" : "ammo-button";
-      button.textContent = AMMO_DEFINITIONS[ammoType].label;
-      button.addEventListener("click", () => this.callbacks?.selectAmmo(ammoType));
-      container.appendChild(button);
+      const button = container.querySelector<HTMLButtonElement>(`button[data-ammo-type="${ammoType}"]`);
+      if (!button) continue;
+      const selected = ammoType === selectedAmmo;
+      button.className = selected ? "ammo-button selected" : "ammo-button";
+      button.setAttribute("aria-pressed", String(selected));
     }
   }
 
   private renderLobbyList(lobbies: LobbyInfo[]): void {
     const container = this.byId("lobbyList");
     if (!container) return;
-    container.innerHTML = "";
+    const nextKey = lobbies
+      .map((lobby) => `${lobby.code}:${lobby.hostName}:${lobby.playerCount}:${lobby.maxPlayers}:${lobby.roundState}`)
+      .join("|");
+    if (nextKey === this.lobbyListKey) return;
+    this.lobbyListKey = nextKey;
+    container.replaceChildren();
     if (lobbies.length === 0) {
       const empty = document.createElement("p");
       empty.className = "empty-list";
@@ -232,10 +256,13 @@ export class Hud {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "lobby-row";
-      button.innerHTML = `
-        <span><strong>${lobby.code}</strong> ${lobby.hostName}</span>
-        <span>${lobby.playerCount}/${lobby.maxPlayers}</span>
-      `;
+      const label = document.createElement("span");
+      const code = document.createElement("strong");
+      code.textContent = lobby.code;
+      label.append(code, ` ${lobby.hostName}`);
+      const count = document.createElement("span");
+      count.textContent = `${lobby.playerCount}/${lobby.maxPlayers}`;
+      button.append(label, count);
       button.addEventListener("click", () => this.callbacks?.joinLobby(lobby.code, this.getPlayerName()));
       container.appendChild(button);
     }
