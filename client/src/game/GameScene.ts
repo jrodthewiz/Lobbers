@@ -1,0 +1,304 @@
+import Phaser from "phaser";
+import { AMMO_DEFINITIONS, getAmmoDefinition } from "../../../shared/game/ammo";
+import { COURT_FIXTURES } from "../../../shared/game/fixtures";
+import { SIDE_SIGN, WORLD } from "../../../shared/game/constants";
+import {
+  buildLaunchVelocity,
+  buildTankHitbox,
+  normalize,
+  normalizeAimForSide,
+  predictTrajectory,
+  resolveChargeRatio,
+  resolveMuzzlePosition,
+} from "../../../shared/game/math";
+import type { AmmoType, Side, Vec2 } from "../../../shared/game/types";
+import type { GameSnapshot, PlayerView } from "./viewModel";
+import { EMPTY_SNAPSHOT } from "./viewModel";
+
+type GameSceneCallbacks = {
+  chargeStart: () => void;
+  chargeCancel: () => void;
+  throwRelease: (aim: Vec2) => void;
+};
+
+const COLORS = {
+  skyTop: 0x111827,
+  court: 0x42513a,
+  lane: 0x7b8f59,
+  line: 0xd7e6b0,
+  cage: 0xd8dee9,
+  flagBlue: 0x38bdf8,
+  flagRed: 0xfb7185,
+  marker: 0xfacc15,
+  blue: 0x2563eb,
+  blueLight: 0x7dd3fc,
+  red: 0xdc2626,
+  redLight: 0xfda4af,
+  worm: 0xf5d0a9,
+  javelin: 0xfacc15,
+  shotput: 0xe5e7eb,
+  splitter: 0x34d399,
+  preview: 0xfef3c7,
+} as const;
+
+const colorForSide = (side: Side): number => (side === "blue" ? COLORS.blue : COLORS.red);
+const lightColorForSide = (side: Side): number => (side === "blue" ? COLORS.blueLight : COLORS.redLight);
+
+const colorForAmmo = (ammoType: AmmoType): number => {
+  if (ammoType === "shotput") return COLORS.shotput;
+  if (ammoType === "splitter") return COLORS.splitter;
+  return COLORS.javelin;
+};
+
+export class GameScene extends Phaser.Scene {
+  private graphics!: Phaser.GameObjects.Graphics;
+  private snapshot: GameSnapshot = EMPTY_SNAPSHOT;
+  private localSessionId = "";
+  private selectedAmmo: AmmoType = "javelin";
+  private callbacks: GameSceneCallbacks | null = null;
+  private pointerAim: Vec2 = { x: 1, y: -0.35 };
+  private chargingStartedAtMs: number | null = null;
+
+  constructor() {
+    super("GameScene");
+  }
+
+  create(): void {
+    this.graphics = this.add.graphics();
+    this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => this.handlePointerDown(pointer));
+    this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => this.handlePointerMove(pointer));
+    this.input.on("pointerup", () => this.handlePointerUp());
+    this.input.keyboard?.on("keydown-ESC", () => this.cancelCharge());
+  }
+
+  override update(): void {
+    this.draw();
+  }
+
+  setCallbacks(callbacks: GameSceneCallbacks): void {
+    this.callbacks = callbacks;
+  }
+
+  setSnapshot(snapshot: GameSnapshot): void {
+    this.snapshot = snapshot;
+  }
+
+  setLocalSessionId(sessionId: string): void {
+    this.localSessionId = sessionId;
+  }
+
+  setSelectedAmmo(ammoType: AmmoType): void {
+    this.selectedAmmo = ammoType;
+  }
+
+  private handlePointerDown(pointer: Phaser.Input.Pointer): void {
+    if (!this.canCharge()) return;
+    this.updatePointerAim(pointer);
+    this.chargingStartedAtMs = performance.now();
+    this.callbacks?.chargeStart();
+  }
+
+  private handlePointerMove(pointer: Phaser.Input.Pointer): void {
+    this.updatePointerAim(pointer);
+  }
+
+  private handlePointerUp(): void {
+    if (this.chargingStartedAtMs === null) return;
+    const aim = this.pointerAim;
+    this.chargingStartedAtMs = null;
+    this.callbacks?.throwRelease(aim);
+  }
+
+  private cancelCharge(): void {
+    if (this.chargingStartedAtMs === null) return;
+    this.chargingStartedAtMs = null;
+    this.callbacks?.chargeCancel();
+  }
+
+  private updatePointerAim(pointer: Phaser.Input.Pointer): void {
+    const player = this.getLocalPlayer();
+    if (!player) return;
+    const muzzle = resolveMuzzlePosition(player.x, player.y, player.side);
+    const raw = normalize(
+      pointer.worldX - muzzle.x,
+      pointer.worldY - muzzle.y,
+      { x: SIDE_SIGN[player.side], y: -0.35 },
+    );
+    this.pointerAim = normalizeAimForSide({ aimX: raw.x, aimY: raw.y }, player.side);
+  }
+
+  private canCharge(): boolean {
+    const player = this.getLocalPlayer();
+    return Boolean(player && player.connected && player.hp > 0 && this.snapshot.roundState === "active");
+  }
+
+  private getLocalPlayer(): PlayerView | null {
+    return this.snapshot.players.find((player) => player.sessionId === this.localSessionId) ?? null;
+  }
+
+  private draw(): void {
+    this.graphics.clear();
+    this.drawCourt();
+    this.drawFixtures();
+    this.drawPlayers();
+    this.drawProjectiles();
+    this.drawAimPreview();
+  }
+
+  private drawCourt(): void {
+    const g = this.graphics;
+    g.fillStyle(COLORS.skyTop, 1);
+    g.fillRect(0, 0, WORLD.width, WORLD.height);
+    g.fillStyle(COLORS.court, 1);
+    g.fillRect(0, WORLD.groundY, WORLD.width, WORLD.height - WORLD.groundY);
+    g.fillStyle(COLORS.lane, 1);
+    g.fillRect(80, WORLD.groundY - 18, WORLD.width - 160, 18);
+
+    g.lineStyle(2, COLORS.line, 0.75);
+    g.beginPath();
+    g.moveTo(80, WORLD.groundY);
+    g.lineTo(WORLD.width - 80, WORLD.groundY);
+    g.strokePath();
+
+    for (let x = 120; x <= WORLD.width - 120; x += 100) {
+      const tall = x % 200 === 0;
+      g.lineStyle(tall ? 3 : 1, COLORS.line, tall ? 0.85 : 0.45);
+      g.beginPath();
+      g.moveTo(x, WORLD.groundY - (tall ? 38 : 24));
+      g.lineTo(x, WORLD.groundY + 10);
+      g.strokePath();
+    }
+
+    g.lineStyle(1, 0xffffff, 0.16);
+    for (let y = WORLD.groundY + 30; y <= WORLD.height; y += 30) {
+      g.beginPath();
+      g.moveTo(0, y);
+      g.lineTo(WORLD.width, y);
+      g.strokePath();
+    }
+  }
+
+  private drawFixtures(): void {
+    const g = this.graphics;
+    for (const fixture of COURT_FIXTURES) {
+      if (fixture.kind === "flag") {
+        const color = fixture.x < WORLD.width / 2 ? COLORS.flagBlue : COLORS.flagRed;
+        g.fillStyle(color, 1);
+        g.fillRect(fixture.x, fixture.y, fixture.width, fixture.height);
+        g.fillTriangle(
+          fixture.x + fixture.width,
+          fixture.y + 8,
+          fixture.x + fixture.width + 42,
+          fixture.y + 22,
+          fixture.x + fixture.width,
+          fixture.y + 38,
+        );
+        continue;
+      }
+
+      if (fixture.kind === "marker") {
+        g.fillStyle(COLORS.marker, 0.85);
+        g.fillRect(fixture.x, fixture.y, fixture.width, fixture.height);
+        continue;
+      }
+
+      g.fillStyle(fixture.kind === "cage" ? COLORS.cage : COLORS.marker, fixture.collidable ? 0.92 : 0.35);
+      g.fillRect(fixture.x, fixture.y, fixture.width, fixture.height);
+    }
+  }
+
+  private drawPlayers(): void {
+    for (const player of this.snapshot.players) {
+      this.drawTank(player);
+    }
+  }
+
+  private drawTank(player: PlayerView): void {
+    const g = this.graphics;
+    const sideColor = colorForSide(player.side);
+    const lightColor = lightColorForSide(player.side);
+    const hitbox = buildTankHitbox(player.x, player.y);
+    const bodyY = player.y - WORLD.tankHeight;
+    const bodyX = player.x - (WORLD.tankWidth / 2);
+
+    g.fillStyle(sideColor, player.connected ? 1 : 0.42);
+    g.fillRoundedRect(bodyX, bodyY, WORLD.tankWidth, WORLD.tankHeight, 8);
+    g.fillStyle(0x0f172a, 0.9);
+    g.fillCircle(bodyX + 20, player.y + 2, 9);
+    g.fillCircle(bodyX + WORLD.tankWidth - 20, player.y + 2, 9);
+
+    g.fillStyle(COLORS.worm, player.connected ? 1 : 0.45);
+    g.fillCircle(player.x, bodyY - 9, WORLD.pilotRadius);
+    g.fillStyle(lightColor, 1);
+    g.fillCircle(player.x + (SIDE_SIGN[player.side] * 4), bodyY - 12, 3);
+
+    const aimX = player.sessionId === this.localSessionId ? this.pointerAim.x : player.aimX;
+    const aimY = player.sessionId === this.localSessionId ? this.pointerAim.y : player.aimY;
+    const turretBase = { x: player.x, y: bodyY - 8 };
+    g.lineStyle(8, lightColor, 1);
+    g.beginPath();
+    g.moveTo(turretBase.x, turretBase.y);
+    g.lineTo(turretBase.x + (aimX * WORLD.turretLength), turretBase.y + (aimY * WORLD.turretLength));
+    g.strokePath();
+
+    if (player.hp <= 0) {
+      g.lineStyle(3, 0xffffff, 0.7);
+      g.strokeRect(hitbox.x, hitbox.y, hitbox.width, hitbox.height);
+    }
+  }
+
+  private drawProjectiles(): void {
+    const g = this.graphics;
+    for (const projectile of this.snapshot.projectiles) {
+      g.fillStyle(colorForAmmo(projectile.ammoType), projectile.alive ? 1 : 0.4);
+      g.fillCircle(projectile.x, projectile.y, projectile.radius);
+      g.lineStyle(2, colorForAmmo(projectile.ammoType), 0.35);
+      g.beginPath();
+      g.moveTo(projectile.x, projectile.y);
+      g.lineTo(projectile.x - (projectile.vx * 0.045), projectile.y - (projectile.vy * 0.045));
+      g.strokePath();
+    }
+  }
+
+  private drawAimPreview(): void {
+    const player = this.getLocalPlayer();
+    if (!player || this.snapshot.roundState !== "active") return;
+
+    const startedAtMs = this.chargingStartedAtMs;
+    const isCharging = startedAtMs !== null;
+    const chargeMs = isCharging ? performance.now() - startedAtMs : 700;
+    const ammo = getAmmoDefinition(this.selectedAmmo);
+    const muzzle = resolveMuzzlePosition(player.x, player.y, player.side);
+    const velocity = buildLaunchVelocity(ammo, chargeMs, this.pointerAim);
+    const points = predictTrajectory(
+      {
+        x: muzzle.x,
+        y: muzzle.y,
+        vx: velocity.x,
+        vy: velocity.y,
+        radius: ammo.radius,
+      },
+      ammo.gravityScale,
+      isCharging ? 62 : 32,
+      1 / 34,
+    );
+
+    const g = this.graphics;
+    const ratio = resolveChargeRatio(chargeMs);
+    g.lineStyle(2, COLORS.preview, isCharging ? 0.8 : 0.35);
+    for (let i = 0; i < points.length; i += 3) {
+      const point = points[i];
+      if (!point) continue;
+      g.fillStyle(COLORS.preview, isCharging ? 0.25 + (ratio * 0.5) : 0.25);
+      g.fillCircle(point.x, point.y, 3);
+    }
+
+    if (isCharging) {
+      g.lineStyle(5, colorForAmmo(this.selectedAmmo), 0.85);
+      g.beginPath();
+      g.moveTo(muzzle.x, muzzle.y);
+      g.lineTo(muzzle.x + (this.pointerAim.x * (50 + (ratio * 50))), muzzle.y + (this.pointerAim.y * (50 + (ratio * 50))));
+      g.strokePath();
+    }
+  }
+}
