@@ -7,6 +7,7 @@ export type AmmoDefinition = {
   minSpeed: number;
   maxSpeed: number;
   gravityScale: number;
+  dragPerSecond: number;
   directDamage: number;
   blastDamage: number;
   blastRadius: number;
@@ -29,6 +30,7 @@ export const AMMO_DEFINITIONS: Record<AmmoType, AmmoDefinition> = {
     minSpeed: 560,
     maxSpeed: 980,
     gravityScale: 0.86,
+    dragPerSecond: 0.035,
     directDamage: 20,
     blastDamage: 8,
     blastRadius: 42,
@@ -47,6 +49,7 @@ export const AMMO_DEFINITIONS: Record<AmmoType, AmmoDefinition> = {
     minSpeed: 380,
     maxSpeed: 690,
     gravityScale: 1.18,
+    dragPerSecond: 0.012,
     directDamage: 30,
     blastDamage: 22,
     blastRadius: 88,
@@ -65,6 +68,7 @@ export const AMMO_DEFINITIONS: Record<AmmoType, AmmoDefinition> = {
     minSpeed: 440,
     maxSpeed: 780,
     gravityScale: 1,
+    dragPerSecond: 0.026,
     directDamage: 14,
     blastDamage: 10,
     blastRadius: 54,

@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { AMMO_DEFINITIONS, getAmmoDefinition } from "../../../shared/game/ammo";
+import { buildProjectilePhysicsProfile } from "../../../shared/game/ballistics";
 import { COURT_FIXTURES } from "../../../shared/game/fixtures";
 import { CHARGE, SIDE_SIGN, WORLD } from "../../../shared/game/constants";
 import {
@@ -408,7 +409,7 @@ export class GameScene extends Phaser.Scene {
         vy: velocity.y,
         radius: ammo.radius,
       },
-      ammo.gravityScale,
+      buildProjectilePhysicsProfile(ammo.gravityScale, ammo.dragPerSecond),
       isCharging ? 62 : 32,
       1 / 34,
     );

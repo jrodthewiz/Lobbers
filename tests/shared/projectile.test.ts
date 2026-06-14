@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { AMMO_DEFINITIONS } from "../../shared/game/ammo";
+import {
+  buildProjectilePhysicsProfile,
+  findEarliestProjectileImpact,
+  integrateBallisticProjectile,
+} from "../../shared/game/ballistics";
 import { WORLD } from "../../shared/game/constants";
 import {
   buildLaunchVelocity,
@@ -38,6 +43,32 @@ describe("shared projectile math", () => {
     const next = integrateProjectile({ x: 0, y: 100, vx: 100, vy: -100, radius: 5 }, 0.5, 1);
     expect(next.x).toBeGreaterThan(0);
     expect(next.vy).toBeGreaterThan(-100);
+  });
+
+  it("applies ammo drag without changing deterministic fixed-step shape", () => {
+    const next = integrateBallisticProjectile(
+      { x: 0, y: 100, vx: 1000, vy: -200, radius: 5 },
+      1 / 60,
+      buildProjectilePhysicsProfile(1, 0.6),
+    );
+    expect(next.vx).toBeLessThan(1000);
+    expect(next.x).toBeGreaterThan(0);
+  });
+
+  it("sweeps fast projectiles into thin colliders", () => {
+    const impact = findEarliestProjectileImpact({
+      start: { x: 0, y: 100, vx: 2200, vy: 0, radius: 4 },
+      end: { x: 120, y: 100, vx: 2200, vy: 0, radius: 4 },
+      colliders: [{
+        id: "thin-flag",
+        rect: { x: 58, y: 80, width: 3, height: 60 },
+        directHitSessionId: null,
+      }],
+      groundY: WORLD.groundY,
+    });
+    expect(impact?.colliderId).toBe("thin-flag");
+    expect(impact?.x).toBeGreaterThan(50);
+    expect(impact?.x).toBeLessThan(70);
   });
 
   it("measures throw distance in court meters", () => {

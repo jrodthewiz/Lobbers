@@ -1,14 +1,18 @@
 import { Client, Room } from "colyseus";
 import { AMMO_TYPES, getAmmoDefinition, isAmmoType, type AmmoDefinition } from "../../shared/game/ammo";
+import {
+  buildProjectilePhysicsProfile,
+  findEarliestProjectileImpact,
+  integrateBallisticProjectile,
+  type ProjectileCollider,
+} from "../../shared/game/ballistics";
 import { CLIENT_MESSAGES } from "../../shared/game/messages";
 import { COURT_FIXTURES, getCollidableFixtures } from "../../shared/game/fixtures";
 import { CHARGE, MOVEMENT, ROUND, SIDE_SIGN, SIMULATION, SPAWN_BY_SIDE, WORLD } from "../../shared/game/constants";
 import {
   buildLaunchVelocity,
   buildTankHitbox,
-  circleIntersectsRect,
   clamp,
-  integrateProjectile,
   normalizeAimForSide,
   resolveBlastDamage,
   resolveShoulderPosition,
@@ -493,7 +497,18 @@ export class ThrowRoom extends Room<LobbersState> {
 
       const ammo = getAmmoDefinition(projectile.ammoType);
       runtime.ageSeconds += dtSeconds;
-      const next = integrateProjectile(projectile, dtSeconds, ammo.gravityScale);
+      const previous = {
+        x: projectile.x,
+        y: projectile.y,
+        vx: projectile.vx,
+        vy: projectile.vy,
+        radius: projectile.radius,
+      };
+      const next = integrateBallisticProjectile(
+        previous,
+        dtSeconds,
+        buildProjectilePhysicsProfile(ammo.gravityScale, ammo.dragPerSecond),
+      );
       projectile.x = next.x;
       projectile.y = next.y;
       projectile.vx = next.vx;
@@ -503,7 +518,7 @@ export class ThrowRoom extends Room<LobbersState> {
       const fuseExpired = typeof fuseSeconds === "number" && runtime.ageSeconds >= fuseSeconds;
       const impact = fuseExpired
         ? { x: projectile.x, y: projectile.y, directHitSessionId: null, outOfBounds: false }
-        : this.resolveProjectileImpact(projectile, runtime);
+        : this.resolveProjectileImpact(previous, next, runtime);
 
       if (impact) {
         this.applyImpact(id, impact);
@@ -511,53 +526,40 @@ export class ThrowRoom extends Room<LobbersState> {
     }
   }
 
-  private resolveProjectileImpact(projectile: ProjectileState, runtime: ProjectileRuntime): Impact | null {
-    if (
-      projectile.x < -projectile.radius
-      || projectile.x > WORLD.width + projectile.radius
-      || projectile.y > WORLD.height + projectile.radius
-    ) {
-      return {
-        x: clamp(projectile.x, 0, WORLD.width),
-        y: clamp(projectile.y, 0, WORLD.height),
-        directHitSessionId: null,
-        outOfBounds: true,
-      };
-    }
-
-    if (projectile.y + projectile.radius >= WORLD.groundY) {
-      return {
-        x: projectile.x,
-        y: WORLD.groundY - projectile.radius,
-        directHitSessionId: null,
-        outOfBounds: false,
-      };
-    }
-
+  private resolveProjectileImpact(
+    previous: { x: number; y: number; vx: number; vy: number; radius: number },
+    next: { x: number; y: number; vx: number; vy: number; radius: number },
+    runtime: ProjectileRuntime,
+  ): Impact | null {
+    const colliders: ProjectileCollider[] = [];
     for (const fixture of getCollidableFixtures()) {
-      if (circleIntersectsRect(projectile, fixture)) {
-        return {
-          x: projectile.x,
-          y: projectile.y,
-          directHitSessionId: null,
-          outOfBounds: false,
-        };
-      }
+      colliders.push({
+        id: fixture.id,
+        rect: fixture,
+        directHitSessionId: null,
+      });
     }
-
     for (const [sessionId, player] of this.state.players.entries()) {
       if (sessionId === runtime.ownerSessionId || !player.connected || player.hp <= 0) continue;
-      if (circleIntersectsRect(projectile, buildTankHitbox(player.x, player.y))) {
-        return {
-          x: projectile.x,
-          y: projectile.y,
-          directHitSessionId: sessionId,
-          outOfBounds: false,
-        };
-      }
+      colliders.push({
+        id: `player:${sessionId}`,
+        rect: buildTankHitbox(player.x, player.y),
+        directHitSessionId: sessionId,
+      });
     }
 
-    return null;
+    const impact = findEarliestProjectileImpact({
+      start: previous,
+      end: next,
+      colliders,
+    });
+    if (!impact) return null;
+    return {
+      x: impact.x,
+      y: impact.y,
+      directHitSessionId: impact.directHitSessionId,
+      outOfBounds: impact.outOfBounds,
+    };
   }
 
   private applyImpact(id: string, impact: Impact): void {

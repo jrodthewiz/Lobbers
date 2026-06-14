@@ -1,4 +1,9 @@
 import { AMMO_DEFINITIONS, type AmmoDefinition } from "./ammo";
+import {
+  buildProjectilePhysicsProfile,
+  integrateBallisticProjectile,
+  type ProjectilePhysicsProfile,
+} from "./ballistics";
 import { CHARGE, SIDE_SIGN, WORLD } from "./constants";
 import type { ProjectileKinematics, Rect, Side, ThrowReleasePayload, Vec2 } from "./types";
 
@@ -59,27 +64,29 @@ export const integrateProjectile = (
   projectile: ProjectileKinematics,
   dtSeconds: number,
   gravityScale: number,
+  dragPerSecond = 0,
+  windAccelerationX = 0,
 ): ProjectileKinematics => {
-  const dt = clamp(dtSeconds, 0, 0.1);
-  const nextVy = projectile.vy + (WORLD.gravityPxPerSecondSq * gravityScale * dt);
-  return {
-    ...projectile,
-    x: projectile.x + (projectile.vx * dt),
-    y: projectile.y + (nextVy * dt),
-    vy: nextVy,
-  };
+  return integrateBallisticProjectile(
+    projectile,
+    dtSeconds,
+    buildProjectilePhysicsProfile(gravityScale, dragPerSecond, windAccelerationX),
+  );
 };
 
 export const predictTrajectory = (
   projectile: ProjectileKinematics,
-  gravityScale: number,
+  physics: number | ProjectilePhysicsProfile,
   steps = 56,
   dtSeconds = 1 / 30,
 ): Vec2[] => {
+  const profile = typeof physics === "number"
+    ? buildProjectilePhysicsProfile(physics)
+    : physics;
   const points: Vec2[] = [];
   let current = { ...projectile };
   for (let i = 0; i < steps; i += 1) {
-    current = integrateProjectile(current, dtSeconds, gravityScale);
+    current = integrateBallisticProjectile(current, dtSeconds, profile);
     if (current.x < 0 || current.x > WORLD.width || current.y > WORLD.height) break;
     points.push({ x: current.x, y: current.y });
     if (current.y + current.radius >= WORLD.groundY) break;
