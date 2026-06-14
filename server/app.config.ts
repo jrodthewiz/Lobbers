@@ -14,7 +14,7 @@ export default config({
   },
 
   initializeGameServer: (gameServer) => {
-    gameServer.define(ROOM_NAME, ThrowRoom);
+    gameServer.define(ROOM_NAME, ThrowRoom).filterBy(["code"]);
   },
 
   initializeExpress: (app) => {

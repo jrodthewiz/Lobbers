@@ -7,7 +7,11 @@ type RoomTestHooks = {
   setPatchRate: (milliseconds: number) => void;
   setSimulationInterval: (callback: () => void, milliseconds?: number) => void;
   onMessage: () => void;
-  setMetadata: () => void;
+  setMetadata: (metadata: Record<string, unknown>) => void;
+  listing: {
+    code?: string;
+    metadata?: Record<string, unknown>;
+  };
 };
 
 type RoomPrivateHandlers = {
@@ -22,14 +26,24 @@ const mockClient = (sessionId: string): Client => ({ sessionId }) as Client;
 
 const privateHandlers = (room: ThrowRoom): RoomPrivateHandlers => room as unknown as RoomPrivateHandlers;
 
+const joinGuest = (room: ThrowRoom, client: Client, playerName = "Guest"): void => {
+  room.onJoin(client, { code: room.state.code, playerName });
+};
+
 const createRoom = (options: { bot?: boolean } = {}): ThrowRoom => {
   const room = new ThrowRoom();
   const hooks = room as unknown as RoomTestHooks;
   Object.defineProperty(room, "roomId", { value: "room-test", configurable: true });
+  hooks.listing = {};
   hooks.setPatchRate = () => undefined;
   hooks.setSimulationInterval = () => undefined;
   hooks.onMessage = () => undefined;
-  hooks.setMetadata = () => undefined;
+  hooks.setMetadata = (metadata) => {
+    hooks.listing.metadata = {
+      ...hooks.listing.metadata,
+      ...metadata,
+    };
+  };
   room.onCreate({ hostName: "Host", bot: options.bot });
   return room;
 };
@@ -40,13 +54,20 @@ describe("ThrowRoom", () => {
     expect(room.state.code).toHaveLength(6);
   });
 
+  it("exposes the lobby code for matchmaking filters", () => {
+    const room = createRoom();
+    const listing = (room as unknown as RoomTestHooks).listing;
+    expect(listing.code).toBe(room.state.code);
+    expect(listing.metadata?.code).toBe(room.state.code);
+  });
+
   it("assigns host and guest to opposing sides", () => {
     const room = createRoom();
     const host = mockClient("host");
     const guest = mockClient("guest");
 
     room.onJoin(host, { playerName: "Host" });
-    room.onJoin(guest, { playerName: "Guest" });
+    joinGuest(room, guest);
 
     expect(room.state.players.get(host.sessionId)?.side).toBe("blue");
     expect(room.state.players.get(guest.sessionId)?.side).toBe("red");
@@ -55,9 +76,31 @@ describe("ThrowRoom", () => {
   it("rejects a third player", () => {
     const room = createRoom();
     room.onJoin(mockClient("host"), { playerName: "Host" });
-    room.onJoin(mockClient("guest"), { playerName: "Guest" });
+    joinGuest(room, mockClient("guest"));
 
-    expect(() => room.onJoin(mockClient("third"), { playerName: "Third" })).toThrow("Lobby full");
+    expect(() => joinGuest(room, mockClient("third"), "Third")).toThrow("Lobby full");
+  });
+
+  it("requires the lobby code for guest joins", () => {
+    const room = createRoom();
+    room.onJoin(mockClient("host"), { playerName: "Host" });
+
+    expect(() => room.onJoin(mockClient("guest"), { playerName: "Guest" })).toThrow("Lobby is not accepting players");
+  });
+
+  it("frees a waiting lobby slot after a guest leaves", () => {
+    const room = createRoom();
+    const host = mockClient("host");
+    const guest = mockClient("guest");
+    const replacement = mockClient("replacement");
+
+    room.onJoin(host, { playerName: "Host" });
+    joinGuest(room, guest);
+    room.onLeave(guest);
+    joinGuest(room, replacement, "Replacement");
+
+    expect(room.state.players.has(guest.sessionId)).toBe(false);
+    expect(room.state.players.get(replacement.sessionId)?.side).toBe("red");
   });
 
   it("enters countdown when both players are ready", () => {
@@ -66,7 +109,7 @@ describe("ThrowRoom", () => {
     const guest = mockClient("guest");
     const handlers = privateHandlers(room);
     room.onJoin(host, { playerName: "Host" });
-    room.onJoin(guest, { playerName: "Guest" });
+    joinGuest(room, guest);
 
     handlers.handleSetReady(host, { ready: true });
     handlers.handleSetReady(guest, { ready: true });
@@ -79,7 +122,7 @@ describe("ThrowRoom", () => {
     const host = mockClient("host");
     const handlers = privateHandlers(room);
     room.onJoin(host, { playerName: "Host" });
-    room.onJoin(mockClient("guest"), { playerName: "Guest" });
+    joinGuest(room, mockClient("guest"));
     room.state.roundState = "active";
 
     handlers.handleChargeStart(host, { ammoType: "javelin" });
@@ -94,7 +137,7 @@ describe("ThrowRoom", () => {
     const host = mockClient("host");
     const handlers = privateHandlers(room);
     room.onJoin(host, { playerName: "Host" });
-    room.onJoin(mockClient("guest"), { playerName: "Guest" });
+    joinGuest(room, mockClient("guest"));
     room.state.roundState = "active";
     const startX = room.state.players.get(host.sessionId)?.x ?? 0;
 
@@ -111,7 +154,7 @@ describe("ThrowRoom", () => {
     const host = mockClient("host");
     const handlers = privateHandlers(room);
     room.onJoin(host, { playerName: "Host" });
-    room.onJoin(mockClient("guest"), { playerName: "Guest" });
+    joinGuest(room, mockClient("guest"));
     room.state.roundState = "active";
     const startY = room.state.players.get(host.sessionId)?.y ?? 0;
 

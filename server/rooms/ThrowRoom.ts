@@ -44,6 +44,10 @@ type JoinOptions = {
   playerName?: unknown;
 };
 
+type LobbyListingFields = LobbyInfo & {
+  fixtures: number;
+};
+
 type ChargeRuntime = {
   startedAtMs: number;
   ammoType: AmmoType;
@@ -121,15 +125,7 @@ export class ThrowRoom extends Room<LobbersState> {
 
   requestJoin(options: JoinOptions, isNewRoom: boolean): boolean {
     if (isNewRoom) return true;
-    const requestedCode = normalizeLobbyCode(options?.code);
-    return (
-      requestedCode.length > 0
-      && requestedCode === this.state.code
-      && !this.practiceBotEnabled
-      && this.state.players.size < ROUND.maxPlayers
-      && this.clients.length < ROUND.maxPlayers
-      && this.state.roundState === "waiting"
-    );
+    return this.canAcceptGuestJoin(options);
   }
 
   override onCreate(options: CreateOptions): void {
@@ -143,11 +139,15 @@ export class ThrowRoom extends Room<LobbersState> {
   }
 
   override onJoin(client: Client, options: JoinOptions): void {
-    if (this.state.players.size >= ROUND.maxPlayers) {
+    const joiningHost = this.hostSessionId.length === 0;
+    const side = this.getAvailableSide();
+    if (!side) {
       throw new Error("Lobby full");
     }
+    if (!joiningHost && !this.hasValidGuestJoinRequest(options)) {
+      throw new Error("Lobby is not accepting players");
+    }
 
-    const side: Side = this.hasSide("blue") ? "red" : "blue";
     const spawn = SPAWN_BY_SIDE[side];
     const player = new PlayerState();
     player.side = side;
@@ -179,6 +179,13 @@ export class ThrowRoom extends Room<LobbersState> {
     player.ready = false;
     this.chargesBySessionId.delete(client.sessionId);
     this.movementBySessionId.delete(client.sessionId);
+
+    if (this.state.roundState === "waiting") {
+      this.state.players.delete(client.sessionId);
+      this.promoteHostIfNeeded();
+      this.syncLobbyMetadata();
+      return;
+    }
 
     if (this.state.roundState === "active" || this.state.roundState === "countdown") {
       const opponent = this.getConnectedPlayers().find(([sessionId]) => sessionId !== client.sessionId);
@@ -707,11 +714,43 @@ export class ThrowRoom extends Room<LobbersState> {
     return player;
   }
 
-  private hasSide(side: Side): boolean {
+  private canAcceptGuestJoin(options: JoinOptions): boolean {
+    return this.hasValidGuestJoinRequest(options) && this.getAvailableSide() !== null;
+  }
+
+  private hasValidGuestJoinRequest(options: JoinOptions): boolean {
+    const requestedCode = normalizeLobbyCode(options?.code);
+    return (
+      requestedCode.length > 0
+      && requestedCode === this.state.code
+      && !this.practiceBotEnabled
+      && this.state.roundState === "waiting"
+    );
+  }
+
+  private getAvailableSide(): Side | null {
+    const occupied = new Set<Side>();
     for (const [, player] of this.state.players.entries()) {
-      if (player.side === side) return true;
+      if (player.connected && isSide(player.side)) {
+        occupied.add(player.side);
+      }
     }
-    return false;
+    if (!occupied.has("blue")) return "blue";
+    if (!occupied.has("red")) return "red";
+    return null;
+  }
+
+  private promoteHostIfNeeded(): void {
+    if (this.hostSessionId && this.state.players.has(this.hostSessionId)) return;
+
+    const nextHost = Array.from(this.state.players.entries())
+      .find(([, player]) => player.connected && !player.isBot);
+    this.hostSessionId = nextHost?.[0] ?? "";
+    this.state.hostName = nextHost?.[1].name ?? "Host";
+
+    for (const [sessionId, player] of this.state.players.entries()) {
+      player.isHost = sessionId === this.hostSessionId;
+    }
   }
 
   private getConnectedPlayers(): Array<[string, PlayerState]> {
@@ -731,10 +770,23 @@ export class ThrowRoom extends Room<LobbersState> {
 
   private syncLobbyMetadata(): void {
     const info = this.buildLobbyInfo();
-    upsertLobby(info);
-    this.setMetadata({
+    const listingFields: LobbyListingFields = {
       ...info,
       fixtures: COURT_FIXTURES.length,
+    };
+    upsertLobby(info);
+    this.syncLobbyListingFields(listingFields);
+    this.setMetadata(listingFields);
+  }
+
+  private syncLobbyListingFields(fields: LobbyListingFields): void {
+    if (!this.listing) return;
+    Object.assign(this.listing, {
+      code: fields.code,
+      hostName: fields.hostName,
+      playerCount: fields.playerCount,
+      maxPlayers: fields.maxPlayers,
+      roundState: fields.roundState,
     });
   }
 }
