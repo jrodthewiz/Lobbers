@@ -22,3 +22,11 @@ test("host and join lobby smoke", async ({ browser }) => {
   await hostPage.close();
   await guestPage.close();
 });
+
+test("practice bot smoke", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Practice Bot" }).click();
+  await expect(page.locator("#redName")).toContainText("Practice Bot");
+  await page.getByRole("button", { name: "Mark Ready" }).click();
+  await expect(page.locator("#roundState")).toContainText(/COUNTDOWN|ACTIVE/);
+});

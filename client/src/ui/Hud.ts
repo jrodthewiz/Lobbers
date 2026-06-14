@@ -4,6 +4,7 @@ import type { GameSnapshot, PlayerView } from "../game/viewModel";
 
 type HudCallbacks = {
   hostLobby: (playerName: string) => void;
+  practiceBot: (playerName: string) => void;
   joinLobby: (code: string, playerName: string) => void;
   refreshLobbies: () => void;
   selectAmmo: (ammoType: AmmoType) => void;
@@ -56,8 +57,8 @@ export class Hud {
     this.setText("lastDistance", `${local?.lastThrowDistance.toFixed(1) ?? "0.0"} m`);
     this.setText("bestDistance", `${local?.bestThrowDistance.toFixed(1) ?? "0.0"} m`);
 
-    this.setText("blueName", blue?.name ?? "Waiting");
-    this.setText("redName", red?.name ?? "Waiting");
+    this.setText("blueName", this.playerLabel(blue));
+    this.setText("redName", this.playerLabel(red));
     this.setText("blueHpText", `${Math.round(blue?.hp ?? 0)} HP`);
     this.setText("redHpText", `${Math.round(red?.hp ?? 0)} HP`);
     this.setBar("blueHpBar", hpPercent(blue));
@@ -113,6 +114,7 @@ export class Hud {
           </label>
           <div class="button-row">
             <button id="hostButton" type="button">Host Lobby</button>
+            <button id="botButton" type="button">Practice Bot</button>
             <button id="refreshButton" type="button">Browse Lobbies</button>
           </div>
           <label>
@@ -173,6 +175,9 @@ export class Hud {
     this.byId("hostButton")?.addEventListener("click", () => {
       this.callbacks?.hostLobby(this.getPlayerName());
     });
+    this.byId("botButton")?.addEventListener("click", () => {
+      this.callbacks?.practiceBot(this.getPlayerName());
+    });
     this.byId("refreshButton")?.addEventListener("click", () => {
       this.callbacks?.refreshLobbies();
     });
@@ -230,6 +235,11 @@ export class Hud {
   private getPlayerName(): string {
     const input = this.byId<HTMLInputElement>("playerNameInput");
     return input?.value.trim() || "Lobber";
+  }
+
+  private playerLabel(player: PlayerView | null): string {
+    if (!player) return "Waiting";
+    return player.isBot ? `${player.name} CPU` : player.name;
   }
 
   private setText(id: string, value: string): void {

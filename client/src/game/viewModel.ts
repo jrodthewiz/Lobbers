@@ -17,6 +17,7 @@ export type PlayerView = {
   ready: boolean;
   rematchRequested: boolean;
   isHost: boolean;
+  isBot: boolean;
 };
 
 export type ProjectileView = {

@@ -86,6 +86,7 @@ export class LobbersApp {
 
     this.hud.setCallbacks({
       hostLobby: (playerName) => void this.hostLobby(playerName),
+      practiceBot: (playerName) => void this.practiceBot(playerName),
       joinLobby: (code, playerName) => void this.joinLobby(code, playerName),
       refreshLobbies: () => void this.refreshLobbies(),
       selectAmmo: (ammoType) => this.selectAmmo(ammoType),
@@ -106,6 +107,17 @@ export class LobbersApp {
       });
       this.attachRoom(room);
     }, "Hosting lobby...");
+  }
+
+  private async practiceBot(playerName: string): Promise<void> {
+    await this.connect(async () => {
+      const room = await this.client.create(ROOM_NAME, {
+        hostName: playerName,
+        playerName,
+        bot: true,
+      });
+      this.attachRoom(room);
+    }, "Starting practice bot...");
   }
 
   private async joinLobby(code: string, playerName: string): Promise<void> {
@@ -249,6 +261,7 @@ export class LobbersApp {
         ready: readBoolean(entry, "ready", false),
         rematchRequested: readBoolean(entry, "rematchRequested", false),
         isHost: readBoolean(entry, "isHost", false),
+        isBot: readBoolean(entry, "isBot", false),
       });
     });
     return players;

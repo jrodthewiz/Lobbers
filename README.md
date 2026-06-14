@@ -25,9 +25,14 @@ npm run build
 ## MVP Scope
 
 - Host a lobby, share a lobby code, browse waiting lobbies, and join a lobby.
+- Start `Practice Bot` from the first screen for a one-player bot match.
 - Two players only: Blue left and Red right.
 - Click-hold to charge, aim with the pointer, release to lob.
 - Server-owned projectile physics, damage, round state, throw distance, and rematch state.
 - Ammo types: `javelin`, `shotput`, and `splitter`.
+
+## Practice Bot
+
+Click `Practice Bot`, then `Mark Ready`. The server adds a Red CPU opponent that cycles through the MVP ammo types and fires on a simple cooldown. Bot behavior is authoritative on the server; the client only renders the replicated bot state and projectiles.
 
 Out of scope for the first milestone: sprites, terrain destruction, bots, matchmaking queues, accounts, persistence, audio, inventory, and ranked systems.

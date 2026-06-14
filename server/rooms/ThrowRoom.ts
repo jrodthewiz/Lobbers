@@ -1,5 +1,5 @@
 import { Client, Room } from "colyseus";
-import { getAmmoDefinition, isAmmoType, type AmmoDefinition } from "../../shared/game/ammo";
+import { AMMO_TYPES, getAmmoDefinition, isAmmoType, type AmmoDefinition } from "../../shared/game/ammo";
 import { CLIENT_MESSAGES } from "../../shared/game/messages";
 import { COURT_FIXTURES, getCollidableFixtures } from "../../shared/game/fixtures";
 import { CHARGE, ROOM_NAME, ROUND, SIDE_SIGN, SIMULATION, SPAWN_BY_SIDE, WORLD } from "../../shared/game/constants";
@@ -30,6 +30,7 @@ import { createLobbyCode, normalizeLobbyCode, removeLobby, upsertLobby } from ".
 type CreateOptions = {
   hostName?: unknown;
   playerName?: unknown;
+  bot?: unknown;
 };
 
 type JoinOptions = {
@@ -74,6 +75,9 @@ const sideForPlayer = (player: PlayerState): Side => (
 const getOpponentSide = (side: Side): Side => (side === "blue" ? "red" : "blue");
 
 const nowMs = (): number => Date.now();
+const BOT_SESSION_ID = "bot:red";
+const BOT_FIRE_INTERVAL_MS = 2600;
+const BOT_FIRE_INTERVAL_JITTER_MS = 900;
 
 export class ThrowRoom extends Room<LobbersState> {
   override maxClients = ROUND.maxPlayers;
@@ -83,6 +87,9 @@ export class ThrowRoom extends Room<LobbersState> {
   private readonly projectileRuntimeById = new Map<string, ProjectileRuntime>();
   private projectileSerial = 0;
   private hostSessionId = "";
+  private practiceBotEnabled = false;
+  private nextBotFireAtMs = 0;
+  private botFireCount = 0;
 
   requestJoin(options: JoinOptions, isNewRoom: boolean): boolean {
     if (isNewRoom) return true;
@@ -90,12 +97,15 @@ export class ThrowRoom extends Room<LobbersState> {
     return (
       requestedCode.length > 0
       && requestedCode === this.state.code
+      && !this.practiceBotEnabled
+      && this.state.players.size < ROUND.maxPlayers
       && this.clients.length < ROUND.maxPlayers
       && this.state.roundState === "waiting"
     );
   }
 
   override onCreate(options: CreateOptions): void {
+    this.practiceBotEnabled = options.bot === true;
     this.state.code = createLobbyCode();
     this.state.hostName = toPlayerName(options.hostName ?? options.playerName, "Host");
     this.setPatchRate(1000 / SIMULATION.patchHz);
@@ -126,6 +136,9 @@ export class ThrowRoom extends Room<LobbersState> {
     }
 
     this.state.players.set(client.sessionId, player);
+    if (this.practiceBotEnabled && player.isHost) {
+      this.addPracticeBot();
+    }
     this.syncLobbyMetadata();
   }
 
@@ -187,6 +200,7 @@ export class ThrowRoom extends Room<LobbersState> {
 
     if (this.state.roundState === "active") {
       this.updateProjectiles(dtSeconds);
+      this.updatePracticeBot();
     }
 
     if (this.state.serverTick % SIMULATION.tickHz === 0) {
@@ -262,9 +276,90 @@ export class ThrowRoom extends Room<LobbersState> {
     const player = this.state.players.get(client.sessionId);
     if (!player) return;
     player.rematchRequested = true;
+    this.markPracticeBotRematchReady();
     const connected = this.getConnectedPlayers();
     if (connected.length === ROUND.maxPlayers && connected.every(([, entry]) => entry.rematchRequested)) {
       this.resetRound("countdown");
+    }
+  }
+
+  private addPracticeBot(): void {
+    if (this.state.players.has(BOT_SESSION_ID)) return;
+    const spawn = SPAWN_BY_SIDE.red;
+    const bot = new PlayerState();
+    bot.side = "red";
+    bot.name = "Practice Bot";
+    bot.x = spawn.x;
+    bot.y = spawn.y;
+    bot.aimX = SIDE_SIGN.red;
+    bot.aimY = -0.35;
+    bot.selectedAmmo = "javelin";
+    bot.ready = true;
+    bot.connected = true;
+    bot.isBot = true;
+    this.state.players.set(BOT_SESSION_ID, bot);
+  }
+
+  private updatePracticeBot(): void {
+    if (!this.practiceBotEnabled) return;
+    const currentTime = nowMs();
+    if (currentTime < this.nextBotFireAtMs) return;
+
+    const bot = this.getActivePlayer(BOT_SESSION_ID);
+    const target = this.getConnectedPlayers()
+      .map(([, player]) => player)
+      .find((player) => !player.isBot && player.connected && player.hp > 0);
+    if (!bot || !target) return;
+
+    const ownedProjectileActive = Array.from(this.projectileRuntimeById.values())
+      .some((runtime) => runtime.ownerSessionId === BOT_SESSION_ID);
+    if (ownedProjectileActive) {
+      this.nextBotFireAtMs = currentTime + 500;
+      return;
+    }
+
+    const ammoType = AMMO_TYPES[this.botFireCount % AMMO_TYPES.length] ?? "javelin";
+    const ammo = getAmmoDefinition(ammoType);
+    const aim = this.resolvePracticeBotAim(bot, target);
+    const velocity = buildLaunchVelocity(ammo, CHARGE.maxMs, aim);
+    const muzzle = resolveMuzzlePosition(bot.x, bot.y, "red");
+
+    bot.selectedAmmo = ammo.type;
+    bot.aimX = aim.x;
+    bot.aimY = aim.y;
+    bot.charging = false;
+    this.botFireCount += 1;
+    this.nextBotFireAtMs = currentTime + BOT_FIRE_INTERVAL_MS + ((this.botFireCount % 3) * BOT_FIRE_INTERVAL_JITTER_MS);
+
+    this.spawnProjectile({
+      ammo,
+      ownerSessionId: BOT_SESSION_ID,
+      x: muzzle.x,
+      y: muzzle.y,
+      vx: velocity.x,
+      vy: velocity.y,
+      radius: ammo.radius,
+      canSplit: ammo.fragmentCount > 0,
+      fragment: false,
+    });
+  }
+
+  private resolvePracticeBotAim(bot: PlayerState, target: PlayerState): { x: number; y: number } {
+    const side = sideForPlayer(bot);
+    const muzzle = resolveMuzzlePosition(bot.x, bot.y, side);
+    const targetHitbox = buildTankHitbox(target.x, target.y);
+    const targetX = targetHitbox.x + (targetHitbox.width / 2);
+    const distanceRatio = clamp(Math.abs(targetX - muzzle.x) / WORLD.width, 0.25, 0.9);
+    const angleRadians = (34 + (distanceRatio * 18)) * (Math.PI / 180);
+    const aimX = SIDE_SIGN[side] * Math.cos(angleRadians);
+    const aimY = -Math.sin(angleRadians);
+    return normalizeAimForSide({ aimX, aimY }, side);
+  }
+
+  private markPracticeBotRematchReady(): void {
+    const bot = this.state.players.get(BOT_SESSION_ID);
+    if (bot?.isBot === true) {
+      bot.rematchRequested = true;
     }
   }
 
@@ -476,13 +571,14 @@ export class ThrowRoom extends Room<LobbersState> {
       player.aimX = SIDE_SIGN[side];
       player.aimY = -0.35;
       player.charging = false;
-      player.ready = true;
+      player.ready = player.isBot === true;
       player.rematchRequested = false;
       player.lastThrowDistance = 0;
     }
     this.state.roundState = nextState;
     this.state.winnerSide = "";
     this.state.countdownEndsAtMs = nextState === "countdown" ? nowMs() + ROUND.countdownMs : 0;
+    this.nextBotFireAtMs = this.state.countdownEndsAtMs + 800;
     this.syncLobbyMetadata();
   }
 
@@ -504,7 +600,7 @@ export class ThrowRoom extends Room<LobbersState> {
     this.state.countdownEndsAtMs = 0;
     this.resetTransientRoundState(true);
     for (const [, player] of this.state.players.entries()) {
-      player.ready = false;
+      player.ready = player.isBot === true;
       player.rematchRequested = false;
     }
     this.syncLobbyMetadata();

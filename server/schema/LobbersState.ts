@@ -18,6 +18,7 @@ export class PlayerState extends Schema {
   @type("boolean") ready = false;
   @type("boolean") rematchRequested = false;
   @type("boolean") isHost = false;
+  @type("boolean") isBot = false;
 }
 
 export class ProjectileState extends Schema {
