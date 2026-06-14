@@ -7,18 +7,22 @@ export class PlayerState extends Schema {
   @type("string") name = "Lobber";
   @type("number") x = 0;
   @type("number") y = 0;
+  @type("number") vx = 0;
+  @type("number") vy = 0;
   @type("number") hp: number = ROUND.startingHp;
   @type("number") aimX = 1;
   @type("number") aimY = -0.35;
   @type("string") selectedAmmo: AmmoType = "javelin";
   @type("number") lastThrowDistance = 0;
   @type("number") bestThrowDistance = 0;
+  @type("number") throwSeq = 0;
   @type("boolean") charging = false;
   @type("boolean") connected = true;
   @type("boolean") ready = false;
   @type("boolean") rematchRequested = false;
   @type("boolean") isHost = false;
   @type("boolean") isBot = false;
+  @type("boolean") grounded = true;
 }
 
 export class ProjectileState extends Schema {

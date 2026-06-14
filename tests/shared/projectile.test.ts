@@ -8,6 +8,8 @@ import {
   normalizeAimForSide,
   resolveBlastDamage,
   resolveChargeRatio,
+  resolveShoulderPosition,
+  resolveThrowHandPosition,
   resolveThrowDistanceMeters,
 } from "../../shared/game/math";
 
@@ -40,6 +42,14 @@ describe("shared projectile math", () => {
 
   it("measures throw distance in court meters", () => {
     expect(resolveThrowDistanceMeters(100, 250)).toBe(15);
+  });
+
+  it("places the throw hand in front of the shoulder", () => {
+    const aim = normalizeAimForSide({ aimX: 1, aimY: -0.4 }, "blue");
+    const shoulder = resolveShoulderPosition(170, WORLD.groundY - WORLD.tankHeight, "blue");
+    const hand = resolveThrowHandPosition(170, WORLD.groundY - WORLD.tankHeight, "blue", aim);
+    expect(hand.x).toBeGreaterThan(shoulder.x);
+    expect(hand.y).toBeLessThan(shoulder.y);
   });
 
   it("checks circle and rectangle collision", () => {

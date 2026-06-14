@@ -48,6 +48,11 @@ export type SetReadyPayload = {
   ready: boolean;
 };
 
+export type MoveInputPayload = {
+  moveX: number;
+  jump: boolean;
+};
+
 export type ProjectileKinematics = {
   x: number;
   y: number;

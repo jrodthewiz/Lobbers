@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Client } from "colyseus";
 import { ThrowRoom } from "../../server/rooms/ThrowRoom";
-import type { ChargeStartPayload, SetReadyPayload, ThrowReleasePayload } from "../../shared/game/types";
+import type { ChargeStartPayload, MoveInputPayload, SetReadyPayload, ThrowReleasePayload } from "../../shared/game/types";
 
 type RoomTestHooks = {
   setPatchRate: (milliseconds: number) => void;
@@ -14,6 +14,7 @@ type RoomPrivateHandlers = {
   handleSetReady: (client: Client, payload: SetReadyPayload) => void;
   handleChargeStart: (client: Client, payload: ChargeStartPayload) => void;
   handleThrowRelease: (client: Client, payload: ThrowReleasePayload) => void;
+  handleMoveInput: (client: Client, payload: MoveInputPayload) => void;
   update: (dtSeconds: number) => void;
 };
 
@@ -84,7 +85,42 @@ describe("ThrowRoom", () => {
     handlers.handleChargeStart(host, { ammoType: "javelin" });
     handlers.handleThrowRelease(host, { aimX: 1, aimY: -0.42 });
 
+    expect(room.state.players.get(host.sessionId)?.throwSeq).toBe(1);
     expect(room.state.projectiles.size).toBeGreaterThan(0);
+  });
+
+  it("moves a human tank from move input", () => {
+    const room = createRoom();
+    const host = mockClient("host");
+    const handlers = privateHandlers(room);
+    room.onJoin(host, { playerName: "Host" });
+    room.onJoin(mockClient("guest"), { playerName: "Guest" });
+    room.state.roundState = "active";
+    const startX = room.state.players.get(host.sessionId)?.x ?? 0;
+
+    handlers.handleMoveInput(host, { moveX: 1, jump: false });
+    for (let i = 0; i < 10; i += 1) {
+      handlers.update(1 / 60);
+    }
+
+    expect(room.state.players.get(host.sessionId)?.x).toBeGreaterThan(startX);
+  });
+
+  it("jumps a grounded human tank", () => {
+    const room = createRoom();
+    const host = mockClient("host");
+    const handlers = privateHandlers(room);
+    room.onJoin(host, { playerName: "Host" });
+    room.onJoin(mockClient("guest"), { playerName: "Guest" });
+    room.state.roundState = "active";
+    const startY = room.state.players.get(host.sessionId)?.y ?? 0;
+
+    handlers.handleMoveInput(host, { moveX: 0, jump: true });
+    handlers.update(1 / 60);
+
+    const player = room.state.players.get(host.sessionId);
+    expect(player?.y).toBeLessThan(startY);
+    expect(player?.grounded).toBe(false);
   });
 
   it("adds a ready red practice bot when requested", () => {

@@ -13,6 +13,9 @@ export const WORLD = {
   tankHitboxHeight: 54,
   pilotRadius: 12,
   turretLength: 58,
+  armUpperLength: 40,
+  armForearmLength: 48,
+  elbowGearRadius: 13,
 } as const;
 
 export const SIMULATION = {
@@ -30,6 +33,14 @@ export const ROUND = {
 export const CHARGE = {
   minMs: 120,
   maxMs: 1600,
+} as const;
+
+export const MOVEMENT = {
+  moveSpeedPxPerSecond: 260,
+  jumpVelocityPxPerSecond: -560,
+  maxFallSpeedPxPerSecond: 920,
+  sideBoundaryPadding: 88,
+  centerNoCrossPadding: 136,
 } as const;
 
 export const SPAWN_BY_SIDE: Record<Side, { x: number; y: number }> = {

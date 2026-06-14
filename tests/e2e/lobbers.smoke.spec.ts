@@ -11,6 +11,8 @@ test("host and join lobby smoke", async ({ browser }) => {
   expect(code).toHaveLength(6);
 
   await guestPage.goto("/");
+  await guestPage.getByRole("button", { name: "Browse Lobbies" }).click();
+  await expect(guestPage.locator("#lobbyList")).toContainText(code);
   await guestPage.locator("#joinCodeInput").fill(code);
   await guestPage.getByRole("button", { name: "Join By Code" }).click();
   await expect(guestPage.locator("#roomCode")).toHaveText(code);
@@ -29,4 +31,39 @@ test("practice bot smoke", async ({ page }) => {
   await expect(page.locator("#redName")).toContainText("Practice Bot");
   await page.getByRole("button", { name: "Mark Ready" }).click();
   await expect(page.locator("#roundState")).toContainText(/COUNTDOWN|ACTIVE/);
+});
+
+test("practice controls and combat smoke", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Practice Bot" }).click();
+  await page.getByRole("button", { name: "Mark Ready" }).click();
+  await expect(page.locator("#roundState")).toContainText("ACTIVE", { timeout: 5000 });
+
+  const startX = Number(await page.locator("#hud-root").evaluate((element) => element.dataset.localX ?? "0"));
+  await page.keyboard.down("d");
+  await page.waitForTimeout(450);
+  await page.keyboard.up("d");
+  const movedX = Number(await page.locator("#hud-root").evaluate((element) => element.dataset.localX ?? "0"));
+  expect(movedX).toBeGreaterThan(startX);
+
+  const groundY = Number(await page.locator("#hud-root").evaluate((element) => element.dataset.localY ?? "0"));
+  await page.keyboard.press("Space");
+  await page.waitForTimeout(120);
+  const jumpY = Number(await page.locator("#hud-root").evaluate((element) => element.dataset.localY ?? "0"));
+  expect(jumpY).toBeLessThan(groundY);
+
+  const canvasBox = await page.locator("canvas").boundingBox();
+  expect(canvasBox).not.toBeNull();
+  if (!canvasBox) return;
+  await page.mouse.move(canvasBox.x + 620, canvasBox.y + 360);
+  await page.mouse.down();
+  await page.waitForTimeout(360);
+  await page.mouse.up();
+
+  await page.waitForFunction(() => {
+    const hud = document.querySelector<HTMLElement>("#hud-root");
+    const projectileCount = Number(hud?.dataset.projectileCount ?? "0");
+    const lastDistance = Number(hud?.dataset.localLastDistance ?? "0");
+    return projectileCount > 0 || lastDistance > 0;
+  });
 });

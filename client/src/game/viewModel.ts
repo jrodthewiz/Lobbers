@@ -6,18 +6,22 @@ export type PlayerView = {
   name: string;
   x: number;
   y: number;
+  vx: number;
+  vy: number;
   hp: number;
   aimX: number;
   aimY: number;
   selectedAmmo: AmmoType;
   lastThrowDistance: number;
   bestThrowDistance: number;
+  throwSeq: number;
   charging: boolean;
   connected: boolean;
   ready: boolean;
   rematchRequested: boolean;
   isHost: boolean;
   isBot: boolean;
+  grounded: boolean;
 };
 
 export type ProjectileView = {

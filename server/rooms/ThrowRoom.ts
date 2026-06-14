@@ -2,7 +2,7 @@ import { Client, Room } from "colyseus";
 import { AMMO_TYPES, getAmmoDefinition, isAmmoType, type AmmoDefinition } from "../../shared/game/ammo";
 import { CLIENT_MESSAGES } from "../../shared/game/messages";
 import { COURT_FIXTURES, getCollidableFixtures } from "../../shared/game/fixtures";
-import { CHARGE, ROOM_NAME, ROUND, SIDE_SIGN, SIMULATION, SPAWN_BY_SIDE, WORLD } from "../../shared/game/constants";
+import { CHARGE, MOVEMENT, ROUND, SIDE_SIGN, SIMULATION, SPAWN_BY_SIDE, WORLD } from "../../shared/game/constants";
 import {
   buildLaunchVelocity,
   buildTankHitbox,
@@ -11,12 +11,14 @@ import {
   integrateProjectile,
   normalizeAimForSide,
   resolveBlastDamage,
-  resolveMuzzlePosition,
+  resolveShoulderPosition,
+  resolveThrowHandPosition,
   resolveThrowDistanceMeters,
 } from "../../shared/game/math";
 import type {
   ChargeStartPayload,
   LobbyInfo,
+  MoveInputPayload,
   RoundState,
   SelectAmmoPayload,
   SetReadyPayload,
@@ -41,6 +43,11 @@ type JoinOptions = {
 type ChargeRuntime = {
   startedAtMs: number;
   ammoType: AmmoType;
+};
+
+type MovementRuntime = {
+  moveX: number;
+  jumpQueued: boolean;
 };
 
 type ProjectileRuntime = {
@@ -78,12 +85,29 @@ const nowMs = (): number => Date.now();
 const BOT_SESSION_ID = "bot:red";
 const BOT_FIRE_INTERVAL_MS = 2600;
 const BOT_FIRE_INTERVAL_JITTER_MS = 900;
+const TANK_GROUND_Y = WORLD.groundY - WORLD.tankHeight;
+
+const resolveSideBounds = (side: Side): { minX: number; maxX: number } => {
+  const minX = MOVEMENT.sideBoundaryPadding;
+  const maxX = WORLD.width - MOVEMENT.sideBoundaryPadding;
+  if (side === "blue") {
+    return {
+      minX,
+      maxX: (WORLD.width / 2) - MOVEMENT.centerNoCrossPadding,
+    };
+  }
+  return {
+    minX: (WORLD.width / 2) + MOVEMENT.centerNoCrossPadding,
+    maxX,
+  };
+};
 
 export class ThrowRoom extends Room<LobbersState> {
   override maxClients = ROUND.maxPlayers;
   override state = new LobbersState();
 
   private readonly chargesBySessionId = new Map<string, ChargeRuntime>();
+  private readonly movementBySessionId = new Map<string, MovementRuntime>();
   private readonly projectileRuntimeById = new Map<string, ProjectileRuntime>();
   private projectileSerial = 0;
   private hostSessionId = "";
@@ -150,6 +174,7 @@ export class ThrowRoom extends Room<LobbersState> {
     player.charging = false;
     player.ready = false;
     this.chargesBySessionId.delete(client.sessionId);
+    this.movementBySessionId.delete(client.sessionId);
 
     if (this.state.roundState === "active" || this.state.roundState === "countdown") {
       const opponent = this.getConnectedPlayers().find(([sessionId]) => sessionId !== client.sessionId);
@@ -181,6 +206,9 @@ export class ThrowRoom extends Room<LobbersState> {
     this.onMessage(CLIENT_MESSAGES.SELECT_AMMO, (client, payload: SelectAmmoPayload) => {
       this.handleSelectAmmo(client, payload);
     });
+    this.onMessage(CLIENT_MESSAGES.MOVE_INPUT, (client, payload: MoveInputPayload) => {
+      this.handleMoveInput(client, payload);
+    });
     this.onMessage(CLIENT_MESSAGES.SET_READY, (client, payload: SetReadyPayload) => {
       this.handleSetReady(client, payload);
     });
@@ -199,6 +227,7 @@ export class ThrowRoom extends Room<LobbersState> {
     }
 
     if (this.state.roundState === "active") {
+      this.updatePlayerMovement(dtSeconds);
       this.updateProjectiles(dtSeconds);
       this.updatePracticeBot();
     }
@@ -237,18 +266,19 @@ export class ThrowRoom extends Room<LobbersState> {
     const chargeMs = clamp(nowMs() - charge.startedAtMs, CHARGE.minMs, CHARGE.maxMs);
     const aim = normalizeAimForSide(payload, side);
     const velocity = buildLaunchVelocity(ammo, chargeMs, aim);
-    const muzzle = resolveMuzzlePosition(player.x, player.y, side);
+    const hand = resolveThrowHandPosition(player.x, player.y, side, aim);
 
     player.aimX = aim.x;
     player.aimY = aim.y;
     player.charging = false;
+    player.throwSeq += 1;
     this.chargesBySessionId.delete(client.sessionId);
 
     this.spawnProjectile({
       ammo,
       ownerSessionId: client.sessionId,
-      x: muzzle.x,
-      y: muzzle.y,
+      x: hand.x,
+      y: hand.y,
       vx: velocity.x,
       vy: velocity.y,
       radius: ammo.radius,
@@ -261,6 +291,20 @@ export class ThrowRoom extends Room<LobbersState> {
     const player = this.state.players.get(client.sessionId);
     if (!player || !isAmmoType(payload?.ammoType)) return;
     player.selectedAmmo = payload.ammoType;
+  }
+
+  private handleMoveInput(client: Client, payload: MoveInputPayload): void {
+    const player = this.state.players.get(client.sessionId);
+    if (!player || player.isBot || !player.connected) return;
+    const current = this.movementBySessionId.get(client.sessionId) ?? {
+      moveX: 0,
+      jumpQueued: false,
+    };
+    const moveX = clamp(Number(payload?.moveX ?? 0), -1, 1);
+    this.movementBySessionId.set(client.sessionId, {
+      moveX: Math.abs(moveX) < 0.15 ? 0 : moveX,
+      jumpQueued: current.jumpQueued || payload?.jump === true,
+    });
   }
 
   private handleSetReady(client: Client, payload: SetReadyPayload): void {
@@ -291,12 +335,15 @@ export class ThrowRoom extends Room<LobbersState> {
     bot.name = "Practice Bot";
     bot.x = spawn.x;
     bot.y = spawn.y;
+    bot.vx = 0;
+    bot.vy = 0;
     bot.aimX = SIDE_SIGN.red;
     bot.aimY = -0.35;
     bot.selectedAmmo = "javelin";
     bot.ready = true;
     bot.connected = true;
     bot.isBot = true;
+    bot.grounded = true;
     this.state.players.set(BOT_SESSION_ID, bot);
   }
 
@@ -322,20 +369,21 @@ export class ThrowRoom extends Room<LobbersState> {
     const ammo = getAmmoDefinition(ammoType);
     const aim = this.resolvePracticeBotAim(bot, target);
     const velocity = buildLaunchVelocity(ammo, CHARGE.maxMs, aim);
-    const muzzle = resolveMuzzlePosition(bot.x, bot.y, "red");
+    const hand = resolveThrowHandPosition(bot.x, bot.y, "red", aim);
 
     bot.selectedAmmo = ammo.type;
     bot.aimX = aim.x;
     bot.aimY = aim.y;
     bot.charging = false;
+    bot.throwSeq += 1;
     this.botFireCount += 1;
     this.nextBotFireAtMs = currentTime + BOT_FIRE_INTERVAL_MS + ((this.botFireCount % 3) * BOT_FIRE_INTERVAL_JITTER_MS);
 
     this.spawnProjectile({
       ammo,
       ownerSessionId: BOT_SESSION_ID,
-      x: muzzle.x,
-      y: muzzle.y,
+      x: hand.x,
+      y: hand.y,
       vx: velocity.x,
       vy: velocity.y,
       radius: ammo.radius,
@@ -346,14 +394,55 @@ export class ThrowRoom extends Room<LobbersState> {
 
   private resolvePracticeBotAim(bot: PlayerState, target: PlayerState): { x: number; y: number } {
     const side = sideForPlayer(bot);
-    const muzzle = resolveMuzzlePosition(bot.x, bot.y, side);
+    const shoulder = resolveShoulderPosition(bot.x, bot.y, side);
     const targetHitbox = buildTankHitbox(target.x, target.y);
     const targetX = targetHitbox.x + (targetHitbox.width / 2);
-    const distanceRatio = clamp(Math.abs(targetX - muzzle.x) / WORLD.width, 0.25, 0.9);
+    const distanceRatio = clamp(Math.abs(targetX - shoulder.x) / WORLD.width, 0.25, 0.9);
     const angleRadians = (34 + (distanceRatio * 18)) * (Math.PI / 180);
     const aimX = SIDE_SIGN[side] * Math.cos(angleRadians);
     const aimY = -Math.sin(angleRadians);
     return normalizeAimForSide({ aimX, aimY }, side);
+  }
+
+  private updatePlayerMovement(dtSeconds: number): void {
+    for (const [sessionId, player] of this.state.players.entries()) {
+      if (!player.connected || player.hp <= 0 || player.isBot) continue;
+      const side = sideForPlayer(player);
+      const input = this.movementBySessionId.get(sessionId) ?? {
+        moveX: 0,
+        jumpQueued: false,
+      };
+      const bounds = resolveSideBounds(side);
+      const dt = clamp(dtSeconds, 0, 0.1);
+
+      player.vx = input.moveX * MOVEMENT.moveSpeedPxPerSecond;
+      player.x = clamp(player.x + (player.vx * dt), bounds.minX, bounds.maxX);
+
+      if (input.jumpQueued && player.grounded) {
+        player.vy = MOVEMENT.jumpVelocityPxPerSecond;
+        player.grounded = false;
+      }
+
+      if (!player.grounded || player.vy !== 0) {
+        player.vy = clamp(
+          player.vy + (WORLD.gravityPxPerSecondSq * dt),
+          MOVEMENT.jumpVelocityPxPerSecond,
+          MOVEMENT.maxFallSpeedPxPerSecond,
+        );
+        player.y += player.vy * dt;
+      }
+
+      if (player.y >= TANK_GROUND_Y) {
+        player.y = TANK_GROUND_Y;
+        player.vy = 0;
+        player.grounded = true;
+      }
+
+      this.movementBySessionId.set(sessionId, {
+        moveX: input.moveX,
+        jumpQueued: false,
+      });
+    }
   }
 
   private markPracticeBotRematchReady(): void {
@@ -567,10 +656,13 @@ export class ThrowRoom extends Room<LobbersState> {
       const spawn = SPAWN_BY_SIDE[side];
       player.x = spawn.x;
       player.y = spawn.y;
+      player.vx = 0;
+      player.vy = 0;
       player.hp = ROUND.startingHp;
       player.aimX = SIDE_SIGN[side];
       player.aimY = -0.35;
       player.charging = false;
+      player.grounded = true;
       player.ready = player.isBot === true;
       player.rematchRequested = false;
       player.lastThrowDistance = 0;
@@ -584,6 +676,7 @@ export class ThrowRoom extends Room<LobbersState> {
 
   private resetTransientRoundState(clearProjectiles: boolean): void {
     this.chargesBySessionId.clear();
+    this.movementBySessionId.clear();
     if (clearProjectiles) {
       this.state.projectiles.clear();
       this.projectileRuntimeById.clear();

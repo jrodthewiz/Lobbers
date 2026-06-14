@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { AMMO_DEFINITIONS, getAmmoDefinition } from "../../../shared/game/ammo";
 import { COURT_FIXTURES } from "../../../shared/game/fixtures";
-import { SIDE_SIGN, WORLD } from "../../../shared/game/constants";
+import { CHARGE, SIDE_SIGN, WORLD } from "../../../shared/game/constants";
 import {
   buildLaunchVelocity,
   buildTankHitbox,
@@ -9,7 +9,8 @@ import {
   normalizeAimForSide,
   predictTrajectory,
   resolveChargeRatio,
-  resolveMuzzlePosition,
+  resolveShoulderPosition,
+  resolveThrowHandPosition,
 } from "../../../shared/game/math";
 import type { AmmoType, Side, Vec2 } from "../../../shared/game/types";
 import type { GameSnapshot, PlayerView } from "./viewModel";
@@ -19,6 +20,15 @@ type GameSceneCallbacks = {
   chargeStart: () => void;
   chargeCancel: () => void;
   throwRelease: (aim: Vec2) => void;
+};
+
+type ArmPose = {
+  shoulder: Vec2;
+  elbow: Vec2;
+  hand: Vec2;
+  gearAngle: number;
+  chargeRatio: number;
+  releaseProgress: number;
 };
 
 const COLORS = {
@@ -58,6 +68,8 @@ export class GameScene extends Phaser.Scene {
   private callbacks: GameSceneCallbacks | null = null;
   private pointerAim: Vec2 = { x: 1, y: -0.35 };
   private chargingStartedAtMs: number | null = null;
+  private readonly lastThrowSeqBySessionId = new Map<string, number>();
+  private readonly throwAnimationStartedAtBySessionId = new Map<string, number>();
 
   constructor() {
     super("GameScene");
@@ -80,6 +92,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   setSnapshot(snapshot: GameSnapshot): void {
+    this.trackThrowAnimations(snapshot);
     this.snapshot = snapshot;
   }
 
@@ -118,10 +131,10 @@ export class GameScene extends Phaser.Scene {
   private updatePointerAim(pointer: Phaser.Input.Pointer): void {
     const player = this.getLocalPlayer();
     if (!player) return;
-    const muzzle = resolveMuzzlePosition(player.x, player.y, player.side);
+    const shoulder = resolveShoulderPosition(player.x, player.y, player.side);
     const raw = normalize(
-      pointer.worldX - muzzle.x,
-      pointer.worldY - muzzle.y,
+      pointer.worldX - shoulder.x,
+      pointer.worldY - shoulder.y,
       { x: SIDE_SIGN[player.side], y: -0.35 },
     );
     this.pointerAim = normalizeAimForSide({ aimX: raw.x, aimY: raw.y }, player.side);
@@ -134,6 +147,16 @@ export class GameScene extends Phaser.Scene {
 
   private getLocalPlayer(): PlayerView | null {
     return this.snapshot.players.find((player) => player.sessionId === this.localSessionId) ?? null;
+  }
+
+  private trackThrowAnimations(snapshot: GameSnapshot): void {
+    for (const player of snapshot.players) {
+      const previousSeq = this.lastThrowSeqBySessionId.get(player.sessionId);
+      if (previousSeq !== undefined && player.throwSeq > previousSeq) {
+        this.throwAnimationStartedAtBySessionId.set(player.sessionId, performance.now());
+      }
+      this.lastThrowSeqBySessionId.set(player.sessionId, player.throwSeq);
+    }
   }
 
   private draw(): void {
@@ -232,18 +255,125 @@ export class GameScene extends Phaser.Scene {
     g.fillStyle(lightColor, 1);
     g.fillCircle(player.x + (SIDE_SIGN[player.side] * 4), bodyY - 12, 3);
 
-    const aimX = player.sessionId === this.localSessionId ? this.pointerAim.x : player.aimX;
-    const aimY = player.sessionId === this.localSessionId ? this.pointerAim.y : player.aimY;
-    const turretBase = { x: player.x, y: bodyY - 8 };
-    g.lineStyle(8, lightColor, 1);
-    g.beginPath();
-    g.moveTo(turretBase.x, turretBase.y);
-    g.lineTo(turretBase.x + (aimX * WORLD.turretLength), turretBase.y + (aimY * WORLD.turretLength));
-    g.strokePath();
+    const aim = this.resolvePlayerAim(player);
+    const armPose = this.resolveArmPose(player, aim);
+    this.drawThrowingArm(player, armPose, lightColor);
 
     if (player.hp <= 0) {
       g.lineStyle(3, 0xffffff, 0.7);
       g.strokeRect(hitbox.x, hitbox.y, hitbox.width, hitbox.height);
+    }
+  }
+
+  private resolvePlayerAim(player: PlayerView): Vec2 {
+    return player.sessionId === this.localSessionId
+      ? this.pointerAim
+      : normalize(player.aimX, player.aimY, { x: SIDE_SIGN[player.side], y: -0.35 });
+  }
+
+  private resolveArmPose(player: PlayerView, aim: Vec2): ArmPose {
+    const now = performance.now();
+    const sideSign = SIDE_SIGN[player.side];
+    const shoulder = resolveShoulderPosition(player.x, player.y, player.side);
+    const localCharging = player.sessionId === this.localSessionId && this.chargingStartedAtMs !== null;
+    const observedCharging = localCharging || player.charging;
+    const chargeMs = localCharging && this.chargingStartedAtMs !== null
+      ? now - this.chargingStartedAtMs
+      : (observedCharging ? CHARGE.maxMs * 0.72 : 0);
+    const chargeRatio = observedCharging ? resolveChargeRatio(chargeMs) : 0;
+    const aimAngle = Math.atan2(aim.y, aim.x);
+    const idleAngle = Math.atan2(-0.48, sideSign * 0.88);
+    const foldedAngle = idleAngle - (sideSign * (0.88 + (chargeRatio * 0.78)));
+    const throwStart = this.throwAnimationStartedAtBySessionId.get(player.sessionId) ?? null;
+    const releaseAgeMs = throwStart === null ? Number.POSITIVE_INFINITY : now - throwStart;
+    const releaseProgress = releaseAgeMs <= 180 ? clamp01(releaseAgeMs / 180) : 0;
+    const recoverProgress = releaseAgeMs > 180 && releaseAgeMs <= 520 ? clamp01((releaseAgeMs - 180) / 340) : 0;
+    const easedRelease = easeOutCubic(releaseProgress);
+    const easedRecover = easeOutCubic(recoverProgress);
+    const baseAngle = releaseAgeMs <= 180
+      ? lerp(foldedAngle, aimAngle, easedRelease)
+      : (releaseAgeMs <= 520 ? lerp(aimAngle, idleAngle, easedRecover) : (observedCharging ? foldedAngle : idleAngle));
+    const bend = observedCharging && releaseAgeMs > 180
+      ? 0.8 + (chargeRatio * 0.45)
+      : 0.22;
+    const upperAngle = baseAngle - (sideSign * bend * 0.62);
+    const forearmAngle = baseAngle + (sideSign * bend * 0.88);
+    const elbow = {
+      x: shoulder.x + (Math.cos(upperAngle) * WORLD.armUpperLength),
+      y: shoulder.y + (Math.sin(upperAngle) * WORLD.armUpperLength),
+    };
+    const hand = {
+      x: elbow.x + (Math.cos(forearmAngle) * WORLD.armForearmLength),
+      y: elbow.y + (Math.sin(forearmAngle) * WORLD.armForearmLength),
+    };
+    const spinRate = observedCharging ? 0.036 : 0.006;
+    return {
+      shoulder,
+      elbow,
+      hand,
+      gearAngle: (now * spinRate * sideSign) + (player.throwSeq * 0.85),
+      chargeRatio,
+      releaseProgress: easedRelease,
+    };
+  }
+
+  private drawThrowingArm(player: PlayerView, pose: ArmPose, lightColor: number): void {
+    const g = this.graphics;
+    const armColor = player.connected ? lightColor : 0x94a3b8;
+    const metalColor = 0xd8dee9;
+    const ammo = getAmmoDefinition(player.selectedAmmo);
+
+    g.lineStyle(10, armColor, player.connected ? 1 : 0.45);
+    g.beginPath();
+    g.moveTo(pose.shoulder.x, pose.shoulder.y);
+    g.lineTo(pose.elbow.x, pose.elbow.y);
+    g.strokePath();
+
+    g.lineStyle(8, armColor, player.connected ? 0.94 : 0.42);
+    g.beginPath();
+    g.moveTo(pose.elbow.x, pose.elbow.y);
+    g.lineTo(pose.hand.x, pose.hand.y);
+    g.strokePath();
+
+    g.fillStyle(metalColor, 0.95);
+    g.fillCircle(pose.shoulder.x, pose.shoulder.y, 8);
+    this.drawGear(pose.elbow, pose.gearAngle, pose.chargeRatio, player.connected);
+
+    g.fillStyle(metalColor, 1);
+    g.fillCircle(pose.hand.x, pose.hand.y, 6);
+
+    if (player.charging || (player.sessionId === this.localSessionId && this.chargingStartedAtMs !== null)) {
+      g.fillStyle(colorForAmmo(player.sessionId === this.localSessionId ? this.selectedAmmo : player.selectedAmmo), 0.95);
+      g.fillCircle(pose.hand.x, pose.hand.y, Math.max(5, ammo.radius));
+    }
+
+    if (pose.releaseProgress > 0) {
+      g.lineStyle(3, COLORS.preview, 0.45 * (1 - pose.releaseProgress));
+      g.strokeCircle(pose.elbow.x, pose.elbow.y, WORLD.elbowGearRadius + (pose.releaseProgress * 22));
+    }
+  }
+
+  private drawGear(center: Vec2, angle: number, chargeRatio: number, connected: boolean): void {
+    const g = this.graphics;
+    const radius = WORLD.elbowGearRadius;
+    const alpha = connected ? 1 : 0.4;
+    g.fillStyle(0x0f172a, 0.9 * alpha);
+    g.fillCircle(center.x, center.y, radius + 3);
+    g.lineStyle(3, COLORS.marker, alpha);
+    g.strokeCircle(center.x, center.y, radius);
+    g.lineStyle(2, COLORS.marker, Math.min(1, 0.45 + chargeRatio));
+    for (let i = 0; i < 8; i += 1) {
+      const spokeAngle = angle + ((Math.PI * 2 * i) / 8);
+      g.beginPath();
+      g.moveTo(
+        center.x + (Math.cos(spokeAngle) * 3),
+        center.y + (Math.sin(spokeAngle) * 3),
+      );
+      g.lineTo(
+        center.x + (Math.cos(spokeAngle) * (radius + 7)),
+        center.y + (Math.sin(spokeAngle) * (radius + 7)),
+      );
+      g.strokePath();
     }
   }
 
@@ -268,12 +398,12 @@ export class GameScene extends Phaser.Scene {
     const isCharging = startedAtMs !== null;
     const chargeMs = isCharging ? performance.now() - startedAtMs : 700;
     const ammo = getAmmoDefinition(this.selectedAmmo);
-    const muzzle = resolveMuzzlePosition(player.x, player.y, player.side);
+    const hand = resolveThrowHandPosition(player.x, player.y, player.side, this.pointerAim);
     const velocity = buildLaunchVelocity(ammo, chargeMs, this.pointerAim);
     const points = predictTrajectory(
       {
-        x: muzzle.x,
-        y: muzzle.y,
+        x: hand.x,
+        y: hand.y,
         vx: velocity.x,
         vy: velocity.y,
         radius: ammo.radius,
@@ -296,9 +426,13 @@ export class GameScene extends Phaser.Scene {
     if (isCharging) {
       g.lineStyle(5, colorForAmmo(this.selectedAmmo), 0.85);
       g.beginPath();
-      g.moveTo(muzzle.x, muzzle.y);
-      g.lineTo(muzzle.x + (this.pointerAim.x * (50 + (ratio * 50))), muzzle.y + (this.pointerAim.y * (50 + (ratio * 50))));
+      g.moveTo(hand.x, hand.y);
+      g.lineTo(hand.x + (this.pointerAim.x * (50 + (ratio * 50))), hand.y + (this.pointerAim.y * (50 + (ratio * 50))));
       g.strokePath();
     }
   }
 }
+
+const clamp01 = (value: number): number => Math.max(0, Math.min(1, value));
+const lerp = (a: number, b: number, t: number): number => a + ((b - a) * t);
+const easeOutCubic = (value: number): number => 1 - Math.pow(1 - clamp01(value), 3);

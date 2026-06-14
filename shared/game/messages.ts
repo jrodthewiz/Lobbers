@@ -3,6 +3,7 @@ export const CLIENT_MESSAGES = {
   CHARGE_CANCEL: "chargeCancel",
   THROW_RELEASE: "throwRelease",
   SELECT_AMMO: "selectAmmo",
+  MOVE_INPUT: "moveInput",
   SET_READY: "setReady",
   REMATCH: "rematch",
 } as const;

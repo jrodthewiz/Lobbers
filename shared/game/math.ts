@@ -125,6 +125,26 @@ export const resolveMuzzlePosition = (x: number, y: number, side: Side): Vec2 =>
   y: y - (WORLD.tankHeight * 0.82),
 });
 
+export const resolveShoulderPosition = (x: number, y: number, side: Side): Vec2 => ({
+  x: x + (SIDE_SIGN[side] * (WORLD.tankWidth * 0.12)),
+  y: y - WORLD.tankHeight - (WORLD.pilotRadius * 0.55),
+});
+
+export const resolveThrowHandPosition = (
+  x: number,
+  y: number,
+  side: Side,
+  aim: Vec2,
+): Vec2 => {
+  const shoulder = resolveShoulderPosition(x, y, side);
+  const direction = normalize(aim.x, aim.y, { x: SIDE_SIGN[side], y: -0.35 });
+  const reach = WORLD.armUpperLength + WORLD.armForearmLength;
+  return {
+    x: shoulder.x + (direction.x * reach),
+    y: shoulder.y + (direction.y * reach),
+  };
+};
+
 export const defaultProjectile = (
   ammo: AmmoDefinition = AMMO_DEFINITIONS.javelin,
 ): ProjectileKinematics => ({

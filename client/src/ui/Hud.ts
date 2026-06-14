@@ -50,6 +50,15 @@ export class Hud {
     const blue = snapshot.players.find((player) => player.side === "blue") ?? null;
     const red = snapshot.players.find((player) => player.side === "red") ?? null;
 
+    this.root.dataset.roundState = snapshot.roundState;
+    this.root.dataset.localX = String(Math.round(local?.x ?? 0));
+    this.root.dataset.localY = String(Math.round(local?.y ?? 0));
+    this.root.dataset.localGrounded = String(local?.grounded === true);
+    this.root.dataset.projectileCount = String(snapshot.projectiles.length);
+    this.root.dataset.localLastDistance = String(local?.lastThrowDistance ?? 0);
+    this.root.dataset.blueHp = String(blue?.hp ?? 0);
+    this.root.dataset.redHp = String(red?.hp ?? 0);
+
     this.setText("statusText", context.status);
     this.setText("roomCode", snapshot.code || "------");
     this.setText("roundState", snapshot.roundState.toUpperCase());

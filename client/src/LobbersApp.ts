@@ -56,6 +56,9 @@ export class LobbersApp {
   private status = "Offline";
   private connecting = false;
   private chargeStartedAtMs: number | null = null;
+  private moveLeftDown = false;
+  private moveRightDown = false;
+  private lastSentMoveX = 0;
 
   constructor() {
     const hudRoot = document.querySelector<HTMLElement>("#hud-root");
@@ -93,6 +96,10 @@ export class LobbersApp {
       setReady: (ready) => this.setReady(ready),
       rematch: () => this.rematch(),
     });
+
+    window.addEventListener("keydown", (event) => this.handleKeyDown(event));
+    window.addEventListener("keyup", (event) => this.handleKeyUp(event));
+    window.addEventListener("blur", () => this.releaseMovementInput());
 
     this.setStatus("Ready");
     void this.refreshLobbies();
@@ -151,6 +158,7 @@ export class LobbersApp {
 
   private attachRoom(room: Room): void {
     this.room = room;
+    this.lastSentMoveX = 0;
     this.scene.setLocalSessionId(room.sessionId);
     this.setStatus(`Connected as ${room.sessionId.slice(0, 4)}`);
     room.onStateChange((state: unknown) => {
@@ -226,6 +234,70 @@ export class LobbersApp {
     this.room?.send(CLIENT_MESSAGES.REMATCH);
   }
 
+  private handleKeyDown(event: KeyboardEvent): void {
+    if (this.isTypingTarget(event.target)) return;
+    const key = event.key.toLowerCase();
+    let changed = false;
+
+    if (key === "a" || key === "arrowleft") {
+      this.moveLeftDown = true;
+      changed = true;
+    } else if (key === "d" || key === "arrowright") {
+      this.moveRightDown = true;
+      changed = true;
+    } else if ((key === "w" || key === "arrowup" || key === " ") && !event.repeat) {
+      event.preventDefault();
+      this.sendMoveInput(true);
+      return;
+    }
+
+    if (changed) {
+      event.preventDefault();
+      this.sendMoveInput(false);
+    }
+  }
+
+  private handleKeyUp(event: KeyboardEvent): void {
+    if (this.isTypingTarget(event.target)) return;
+    const key = event.key.toLowerCase();
+    let changed = false;
+
+    if (key === "a" || key === "arrowleft") {
+      this.moveLeftDown = false;
+      changed = true;
+    } else if (key === "d" || key === "arrowright") {
+      this.moveRightDown = false;
+      changed = true;
+    }
+
+    if (changed) {
+      event.preventDefault();
+      this.sendMoveInput(false);
+    }
+  }
+
+  private releaseMovementInput(): void {
+    this.moveLeftDown = false;
+    this.moveRightDown = false;
+    this.sendMoveInput(false, true);
+  }
+
+  private sendMoveInput(jump: boolean, force = false): void {
+    if (!this.room) return;
+    const moveX = (this.moveRightDown ? 1 : 0) - (this.moveLeftDown ? 1 : 0);
+    if (!force && !jump && moveX === this.lastSentMoveX) return;
+    this.lastSentMoveX = moveX;
+    this.room.send(CLIENT_MESSAGES.MOVE_INPUT, {
+      moveX,
+      jump,
+    });
+  }
+
+  private isTypingTarget(target: EventTarget | null): boolean {
+    if (!(target instanceof HTMLElement)) return false;
+    return target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable;
+  }
+
   private snapshotFromState(state: unknown): GameSnapshot {
     return {
       players: this.readPlayers((state as Record<string, unknown> | null)?.players),
@@ -250,18 +322,22 @@ export class LobbersApp {
         name: readString(entry, "name", "Lobber"),
         x: readNumber(entry, "x", 0),
         y: readNumber(entry, "y", 0),
+        vx: readNumber(entry, "vx", 0),
+        vy: readNumber(entry, "vy", 0),
         hp: readNumber(entry, "hp", 0),
         aimX: readNumber(entry, "aimX", 1),
         aimY: readNumber(entry, "aimY", -0.35),
         selectedAmmo: isAmmoType(selectedAmmoValue) ? selectedAmmoValue : "javelin",
         lastThrowDistance: readNumber(entry, "lastThrowDistance", 0),
         bestThrowDistance: readNumber(entry, "bestThrowDistance", 0),
+        throwSeq: readNumber(entry, "throwSeq", 0),
         charging: readBoolean(entry, "charging", false),
         connected: readBoolean(entry, "connected", false),
         ready: readBoolean(entry, "ready", false),
         rematchRequested: readBoolean(entry, "rematchRequested", false),
         isHost: readBoolean(entry, "isHost", false),
         isBot: readBoolean(entry, "isBot", false),
+        grounded: readBoolean(entry, "grounded", true),
       });
     });
     return players;
