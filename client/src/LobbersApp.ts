@@ -96,24 +96,45 @@ export class LobbersApp {
 
     this.hud.setCallbacks({
       hostLobby: (playerName) => {
-        this.audio.play("ui-click");
+        this.audio.playLayered([
+          { key: "ui-host-lobby" },
+          { key: "ui-click", delayMs: 35, volumeScale: 0.55 },
+        ]);
         void this.hostLobby(playerName);
       },
       practiceBot: (playerName) => {
-        this.audio.play("ui-click");
+        this.audio.playLayered([
+          { key: "ui-practice-bot" },
+          { key: "ui-click", delayMs: 35, volumeScale: 0.55 },
+        ]);
         void this.practiceBot(playerName);
       },
-      joinLobby: (code, playerName) => {
-        this.audio.play("ui-click");
+      joinLobby: (code, playerName, source) => {
+        if (source === "list") {
+          this.audio.playLayered([
+            { key: "ui-lobby-row" },
+            { key: "ui-join-lobby", delayMs: 45, volumeScale: 0.7 },
+          ]);
+        } else if (code.trim()) {
+          this.audio.playLayered([
+            { key: "ui-join-lobby" },
+            { key: "ui-click", delayMs: 35, volumeScale: 0.5 },
+          ]);
+        }
         void this.joinLobby(code, playerName);
       },
       refreshLobbies: () => {
-        this.audio.play("ui-click");
+        this.audio.playLayered([
+          { key: "ui-browse-lobbies" },
+          { key: "ui-click", delayMs: 40, volumeScale: 0.45 },
+        ]);
         void this.refreshLobbies();
       },
       selectAmmo: (ammoType) => this.selectAmmo(ammoType),
       setReady: (ready) => this.setReady(ready),
       rematch: () => this.rematch(),
+      uiFocus: () => this.audio.play("ui-focus"),
+      uiHover: () => this.audio.play("ui-hover"),
     });
 
     window.addEventListener("keydown", (event) => this.handleKeyDown(event));
@@ -225,7 +246,10 @@ export class LobbersApp {
   private chargeStart(): void {
     if (!this.room) return;
     this.chargeStartedAtMs = performance.now();
-    this.audio.play("charge-start");
+    this.audio.playLayered([
+      { key: "charge-start" },
+      { key: this.resolveAmmoSelectSound(this.selectedAmmo), delayMs: 45, volumeScale: 0.45 },
+    ]);
     this.room.send(CLIENT_MESSAGES.CHARGE_START, {
       ammoType: this.selectedAmmo,
     });
@@ -241,7 +265,10 @@ export class LobbersApp {
   private throwRelease(aim: Vec2): void {
     if (!this.room) return;
     this.chargeStartedAtMs = null;
-    this.audio.play("throw-release");
+    this.audio.playLayered([
+      { key: "throw-release" },
+      { key: this.resolveAmmoSelectSound(this.selectedAmmo), delayMs: 28, volumeScale: 0.38 },
+    ]);
     this.room.send(CLIENT_MESSAGES.THROW_RELEASE, {
       aimX: aim.x,
       aimY: aim.y,
@@ -249,7 +276,10 @@ export class LobbersApp {
   }
 
   private selectAmmo(ammoType: AmmoType): void {
-    this.audio.play("ui-select");
+    this.audio.playLayered([
+      { key: "ui-select" },
+      { key: this.resolveAmmoSelectSound(ammoType), delayMs: 25 },
+    ]);
     this.selectedAmmo = ammoType;
     this.scene.setSelectedAmmo(ammoType);
     if (this.room) {
@@ -259,16 +289,24 @@ export class LobbersApp {
   }
 
   private setReady(ready: boolean): void {
-    this.audio.play("ui-confirm");
+    this.audio.playLayered([
+      { key: "ui-ready" },
+      { key: "ui-confirm", delayMs: 40, volumeScale: 0.75 },
+    ]);
     this.room?.send(CLIENT_MESSAGES.SET_READY, { ready });
   }
 
   private rematch(): void {
-    this.audio.play("ui-confirm");
+    this.audio.playLayered([
+      { key: "ui-rematch" },
+      { key: "ui-confirm", delayMs: 55, volumeScale: 0.75 },
+    ]);
     this.room?.send(CLIENT_MESSAGES.REMATCH);
   }
 
   private playSnapshotAudio(nextSnapshot: GameSnapshot): void {
+    this.playRoundTransitionAudio(nextSnapshot);
+
     const nextProjectilesById = new Map(nextSnapshot.projectiles.map((projectile) => [projectile.id, projectile]));
     let impactsPlayed = 0;
     for (const [id, projectile] of this.lastProjectilesById) {
@@ -285,7 +323,10 @@ export class LobbersApp {
         && player.throwSeq > previousThrowSeq
         && player.sessionId !== this.room?.sessionId
       ) {
-        this.audio.play("throw-release", 0.78);
+        this.audio.playLayered([
+          { key: "throw-release", volumeScale: 0.78 },
+          { key: this.resolveAmmoSelectSound(player.selectedAmmo), delayMs: 28, volumeScale: 0.28 },
+        ]);
       }
 
       const previousHp = this.lastHpBySessionId.get(player.sessionId);
@@ -317,6 +358,31 @@ export class LobbersApp {
       return projectile.radius < AMMO_DEFINITIONS.splitter.radius ? "fragment-impact" : "splitter-pop";
     }
     return "javelin-impact";
+  }
+
+  private resolveAmmoSelectSound(ammoType: AmmoType): GameSoundKey {
+    if (ammoType === "shotput") return "ammo-shotput-select";
+    if (ammoType === "splitter") return "ammo-splitter-select";
+    return "ammo-javelin-select";
+  }
+
+  private playRoundTransitionAudio(nextSnapshot: GameSnapshot): void {
+    if (this.snapshot.roundState === nextSnapshot.roundState) return;
+
+    if (nextSnapshot.roundState === "countdown") {
+      this.audio.play("round-countdown");
+      return;
+    }
+
+    if (nextSnapshot.roundState === "active") {
+      this.audio.play("round-start");
+      return;
+    }
+
+    if (nextSnapshot.roundState === "ended") {
+      const local = nextSnapshot.players.find((player) => player.sessionId === this.room?.sessionId);
+      this.audio.play(local && local.side === nextSnapshot.winnerSide ? "round-win" : "round-lose");
+    }
   }
 
   private resetAudioTracking(): void {
@@ -405,6 +471,11 @@ export class LobbersApp {
     if (!this.room) return;
     const moveX = (this.moveRightDown ? 1 : 0) - (this.moveLeftDown ? 1 : 0);
     if (!force && !jump && moveX === this.lastSentMoveX) return;
+    if (jump) {
+      this.audio.play("player-jump");
+    } else if (moveX !== 0 && moveX !== this.lastSentMoveX) {
+      this.audio.play("player-step");
+    }
     this.lastSentMoveX = moveX;
     this.room.send(CLIENT_MESSAGES.MOVE_INPUT, {
       moveX,

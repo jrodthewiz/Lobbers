@@ -1,6 +1,4 @@
 import Phaser from "phaser";
-import spriteAtlasJsonUrl from "../assets/lobbers-minimal-atlas.json?url";
-import spriteAtlasImageUrl from "../assets/lobbers-minimal-atlas.png";
 import { getAmmoDefinition } from "../../../shared/game/ammo";
 import { buildProjectilePhysicsProfile } from "../../../shared/game/ballistics";
 import { COURT_FIXTURES } from "../../../shared/game/fixtures";
@@ -17,6 +15,14 @@ import {
 } from "../../../shared/game/math";
 import type { AmmoType, CourtFixture, Side, Vec2 } from "../../../shared/game/types";
 import { ProceduralBackground } from "./ProceduralBackground";
+import {
+  AMMO_FX_FRAMES,
+  AMMO_SPRITE_FRAMES,
+  SPRITE_ATLAS_KEY,
+  SPRITES,
+  spriteAtlasImageUrl,
+  spriteAtlasJsonUrl,
+} from "./spriteAtlas";
 import type { GameSnapshot, PlayerView, ProjectileView } from "./viewModel";
 import { EMPTY_SNAPSHOT } from "./viewModel";
 
@@ -43,6 +49,17 @@ type AmmoFxProfile = {
   spark: number;
   accent: number;
   particleCount: number;
+};
+
+type ImpactFx = {
+  id: string;
+  ammoType: AmmoType;
+  x: number;
+  y: number;
+  radius: number;
+  strength: number;
+  startedAtMs: number;
+  sprites: Phaser.GameObjects.Image[];
 };
 
 const COLORS = {
@@ -97,23 +114,27 @@ const AMMO_FX: Record<AmmoType, AmmoFxProfile> = {
 const colorForSide = (side: Side): number => (side === "blue" ? COLORS.blue : COLORS.red);
 const lightColorForSide = (side: Side): number => (side === "blue" ? COLORS.blueLight : COLORS.redLight);
 
-const SPRITE_ATLAS_KEY = "lobbers-minimal-atlas";
-const SPRITES = {
-  ammoJavelin: "ammo/javelin",
-  ammoShotput: "ammo/shotput",
-  ammoSplitter: "ammo/splitter",
-  barrierStriped: "props/barrier-striped",
-  flagBlue: "props/flag-blue",
-  flagRed: "props/flag-red",
-} as const;
+const colorForAmmo = (ammoType: AmmoType): number => AMMO_FX[ammoType].core;
 
-const AMMO_SPRITE_FRAMES: Record<AmmoType, string> = {
-  javelin: SPRITES.ammoJavelin,
-  shotput: SPRITES.ammoShotput,
-  splitter: SPRITES.ammoSplitter,
+type ArenaDecorConfig = {
+  frame: string;
+  x: number;
+  y: number;
+  scale: number;
+  alpha: number;
+  depth: number;
+  sway: number;
 };
 
-const colorForAmmo = (ammoType: AmmoType): number => AMMO_FX[ammoType].core;
+const ARENA_DECOR_LAYOUT: ArenaDecorConfig[] = [
+  { frame: SPRITES.props.pennants, x: WORLD.width / 2, y: 118, scale: 1.15, alpha: 0.58, depth: 8, sway: 16 },
+  { frame: SPRITES.props.scoreboard, x: WORLD.width / 2, y: 286, scale: 0.66, alpha: 0.62, depth: 8, sway: 10 },
+  { frame: SPRITES.props.rackJavelin, x: 166, y: WORLD.groundY - 70, scale: 0.68, alpha: 0.92, depth: 11, sway: 7 },
+  { frame: SPRITES.props.rackShotput, x: 350, y: WORLD.groundY - 70, scale: 0.54, alpha: 0.86, depth: 11, sway: 8 },
+  { frame: SPRITES.props.rackDiscs, x: WORLD.width - 344, y: WORLD.groundY - 70, scale: 0.54, alpha: 0.86, depth: 11, sway: 8 },
+  { frame: SPRITES.props.coneStack, x: WORLD.width - 164, y: WORLD.groundY - 56, scale: 0.55, alpha: 0.82, depth: 11, sway: 5 },
+  { frame: SPRITES.props.torch, x: WORLD.width / 2 + 260, y: WORLD.groundY - 70, scale: 0.62, alpha: 0.92, depth: 11, sway: 6 },
+];
 
 export class GameScene extends Phaser.Scene {
   private background!: ProceduralBackground;
@@ -129,6 +150,14 @@ export class GameScene extends Phaser.Scene {
   private readonly throwAnimationStartedAtBySessionId = new Map<string, number>();
   private readonly fixtureSpritesById = new Map<string, Phaser.GameObjects.Image>();
   private readonly projectileSpritesById = new Map<string, Phaser.GameObjects.Image>();
+  private readonly projectileTrailSpritesById = new Map<string, Phaser.GameObjects.Image>();
+  private readonly lastProjectilesById = new Map<string, ProjectileView>();
+  private readonly lastHpBySessionId = new Map<string, number>();
+  private readonly impactFx: ImpactFx[] = [];
+  private readonly arenaDecorSprites: Phaser.GameObjects.Image[] = [];
+  private environmentKey = "";
+  private cameraVignette: Phaser.FX.Vignette | null = null;
+  private cameraColorMatrix: Phaser.FX.ColorMatrix | null = null;
   private heldAmmoSprite: Phaser.GameObjects.Image | null = null;
 
   constructor() {
@@ -142,12 +171,15 @@ export class GameScene extends Phaser.Scene {
   create(): void {
     this.background = new ProceduralBackground(this);
     this.background.create();
+    this.installCameraPostFx();
     this.graphics = this.add.graphics().setDepth(10);
     this.fxGraphics = this.add.graphics().setDepth(22);
     this.fxGraphics.setBlendMode(Phaser.BlendModes.ADD);
     this.createFixtureSprites();
+    this.createArenaDecorSprites();
+    this.applyArenaDecorLayout("Lobbers");
     this.heldAmmoSprite = this.add
-      .image(0, 0, SPRITE_ATLAS_KEY, SPRITES.ammoJavelin)
+      .image(0, 0, SPRITE_ATLAS_KEY, SPRITES.ammo.javelin)
       .setOrigin(0.5)
       .setDepth(26)
       .setVisible(false);
@@ -159,6 +191,7 @@ export class GameScene extends Phaser.Scene {
 
   override update(time: number): void {
     this.background.update(time);
+    this.updateCameraPostFx(time);
     this.draw();
   }
 
@@ -167,7 +200,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   setSnapshot(snapshot: GameSnapshot): void {
+    this.updateEnvironment(snapshot);
     this.trackThrowAnimations(snapshot);
+    this.trackImpactFx(snapshot);
     this.snapshot = snapshot;
   }
 
@@ -225,14 +260,122 @@ export class GameScene extends Phaser.Scene {
     return this.snapshot.players.find((player) => player.sessionId === this.localSessionId) ?? null;
   }
 
+  private updateEnvironment(snapshot: GameSnapshot): void {
+    const key = snapshot.code || (snapshot.hostName === "Host" ? "Lobbers" : snapshot.hostName);
+    if (key === this.environmentKey) return;
+    this.environmentKey = key;
+    this.background.setSeed(key);
+    this.applyArenaDecorLayout(key);
+    this.cameras.main.fadeIn(420, 6, 10, 18);
+  }
+
+  private installCameraPostFx(): void {
+    if (this.game.renderer.type !== Phaser.WEBGL) return;
+    try {
+      this.cameraVignette = this.cameras.main.postFX.addVignette(0.5, 0.54, 0.82, 0.18);
+      this.cameraColorMatrix = this.cameras.main.postFX.addColorMatrix();
+      this.cameraColorMatrix.brightness(1.04);
+      this.cameraColorMatrix.saturate(0.12, true);
+    } catch {
+      this.cameraVignette = null;
+      this.cameraColorMatrix = null;
+    }
+  }
+
+  private updateCameraPostFx(time: number): void {
+    if (!this.cameraVignette) return;
+    this.cameraVignette.strength = 0.17 + (Math.sin(time * 0.00075) * 0.018);
+  }
+
   private trackThrowAnimations(snapshot: GameSnapshot): void {
     for (const player of snapshot.players) {
       const previousSeq = this.lastThrowSeqBySessionId.get(player.sessionId);
       if (previousSeq !== undefined && player.throwSeq > previousSeq) {
         this.throwAnimationStartedAtBySessionId.set(player.sessionId, performance.now());
+        this.pulseThrowCameraFx(player.selectedAmmo);
       }
       this.lastThrowSeqBySessionId.set(player.sessionId, player.throwSeq);
     }
+  }
+
+  private trackImpactFx(snapshot: GameSnapshot): void {
+    const nextProjectileIds = new Set(snapshot.projectiles.map((projectile) => projectile.id));
+    const damageDetected = snapshot.players.some((player) => {
+      const previousHp = this.lastHpBySessionId.get(player.sessionId);
+      return previousHp !== undefined && player.hp < previousHp;
+    });
+
+    for (const [projectileId, projectile] of this.lastProjectilesById.entries()) {
+      if (nextProjectileIds.has(projectileId)) continue;
+      this.spawnImpactFx(projectile, damageDetected);
+    }
+
+    this.lastProjectilesById.clear();
+    for (const projectile of snapshot.projectiles) {
+      this.lastProjectilesById.set(projectile.id, projectile);
+    }
+
+    this.lastHpBySessionId.clear();
+    for (const player of snapshot.players) {
+      this.lastHpBySessionId.set(player.sessionId, player.hp);
+    }
+  }
+
+  private spawnImpactFx(projectile: ProjectileView, damageDetected: boolean): void {
+    const strength = this.resolveImpactStrength(projectile.ammoType, damageDetected);
+    this.pulseImpactCameraFx(projectile.ammoType, strength);
+    if (!this.textures.exists(SPRITE_ATLAS_KEY)) return;
+    const frames = AMMO_FX_FRAMES[projectile.ammoType];
+    const sprites: Phaser.GameObjects.Image[] = [];
+    const addSprite = (frame: string, depth: number): Phaser.GameObjects.Image => {
+      const sprite = this.add
+        .image(projectile.x, projectile.y, SPRITE_ATLAS_KEY, frame)
+        .setOrigin(0.5)
+        .setDepth(depth)
+        .setBlendMode(Phaser.BlendModes.ADD);
+      sprites.push(sprite);
+      return sprite;
+    };
+
+    addSprite(frames.impact, 28);
+    addSprite(frames.smoke, 27).setBlendMode(Phaser.BlendModes.NORMAL);
+    if (projectile.ammoType === "splitter") {
+      addSprite(SPRITES.fx.sparkGreen, 29);
+      addSprite(SPRITES.fx.sparkPurple, 29);
+    }
+
+    this.impactFx.push({
+      id: `${projectile.id}:${performance.now()}`,
+      ammoType: projectile.ammoType,
+      x: projectile.x,
+      y: projectile.y,
+      radius: projectile.radius,
+      strength,
+      startedAtMs: performance.now(),
+      sprites,
+    });
+  }
+
+  private pulseThrowCameraFx(ammoType: AmmoType): void {
+    const profile = AMMO_FX[ammoType];
+    const strength = ammoType === "shotput" ? 0.0034 : ammoType === "splitter" ? 0.0025 : 0.0018;
+    this.cameras.main.shake(70, strength, false);
+    if (ammoType !== "javelin") {
+      const rgb = rgbFromHex(profile.glow);
+      this.cameras.main.flash(54, rgb.r, rgb.g, rgb.b, false);
+    }
+  }
+
+  private pulseImpactCameraFx(ammoType: AmmoType, strength: number): void {
+    const profile = AMMO_FX[ammoType];
+    const rgb = rgbFromHex(profile.hot);
+    this.cameras.main.shake(90 + (strength * 70), 0.0022 * strength, true);
+    this.cameras.main.flash(70 + (strength * 36), rgb.r, rgb.g, rgb.b, true);
+  }
+
+  private resolveImpactStrength(ammoType: AmmoType, damageDetected: boolean): number {
+    const base = ammoType === "shotput" ? 1.15 : ammoType === "splitter" ? 0.92 : 0.72;
+    return base * (damageDetected ? 1.28 : 1);
   }
 
   private draw(): void {
@@ -243,6 +386,7 @@ export class GameScene extends Phaser.Scene {
     this.drawFixtures();
     this.drawPlayers();
     this.drawProjectiles();
+    this.drawImpactFx();
     this.drawAimPreview();
   }
 
@@ -648,6 +792,7 @@ export class GameScene extends Phaser.Scene {
         projectile.vy,
         alpha,
       );
+      this.syncProjectileTrailSprite(projectile, alpha);
       g.lineStyle(projectile.ammoType === "javelin" ? 2 : 3, color, 0.28);
       g.beginPath();
       g.moveTo(projectile.x, projectile.y);
@@ -858,6 +1003,69 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private drawImpactFx(): void {
+    const now = performance.now();
+    const g = this.graphics;
+    const fx = this.fxGraphics;
+
+    for (let index = this.impactFx.length - 1; index >= 0; index -= 1) {
+      const impact = this.impactFx[index];
+      if (!impact) continue;
+      const age = now - impact.startedAtMs;
+      const progress = clamp01(age / 620);
+      const inverse = 1 - progress;
+      const profile = AMMO_FX[impact.ammoType];
+      const ease = easeOutCubic(progress);
+      const baseScale = impact.ammoType === "shotput" ? 0.44 : impact.ammoType === "splitter" ? 0.34 : 0.28;
+      const strength = impact.strength;
+
+      if (progress >= 1) {
+        for (const sprite of impact.sprites) sprite.destroy();
+        this.impactFx.splice(index, 1);
+        continue;
+      }
+
+      impact.sprites.forEach((sprite, spriteIndex) => {
+        const spriteScale = baseScale + (ease * strength * (impact.ammoType === "shotput" ? 0.55 : 0.42)) + (spriteIndex * 0.08);
+        sprite
+          .setPosition(
+            impact.x + (spriteIndex > 1 ? Math.cos((now * 0.012) + spriteIndex) * 18 * ease : 0),
+            impact.y + (spriteIndex > 1 ? Math.sin((now * 0.01) + spriteIndex) * 12 * ease : 0),
+          )
+          .setScale(spriteScale)
+          .setRotation((now * 0.002 * (spriteIndex + 1)) + (spriteIndex * 0.7))
+          .setAlpha(Math.max(0, inverse * (spriteIndex === 1 ? 0.5 : 0.84)));
+      });
+
+      fx.lineStyle(3 + (impact.radius * 0.08), profile.hot, inverse * 0.52);
+      fx.strokeCircle(impact.x, impact.y, 18 + (ease * strength * (impact.radius * 4 + 64)));
+      fx.lineStyle(2, profile.glow, inverse * 0.32);
+      fx.strokeCircle(impact.x, impact.y, 8 + (ease * strength * (impact.radius * 3 + 34)));
+
+      if (impact.ammoType === "javelin") {
+        fx.lineStyle(4, profile.spark, inverse * 0.46);
+        fx.beginPath();
+        fx.moveTo(impact.x - 44 - (ease * strength * 28), impact.y + 8);
+        fx.lineTo(impact.x + 44 + (ease * strength * 28), impact.y - 8);
+        fx.strokePath();
+      } else if (impact.ammoType === "shotput") {
+        g.lineStyle(3, 0xffffff, inverse * 0.24);
+        g.strokeCircle(impact.x, impact.y, 28 + (ease * strength * 78));
+        fx.fillStyle(profile.glow, inverse * 0.08);
+        fx.fillCircle(impact.x, impact.y, 34 + (ease * strength * 80));
+      } else {
+        for (let i = 0; i < 7; i += 1) {
+          const angle = (Math.PI * 2 * i) / 7;
+          const distance = 22 + (ease * strength * 74);
+          const dotX = impact.x + (Math.cos(angle) * distance);
+          const dotY = impact.y + (Math.sin(angle) * distance);
+          fx.fillStyle(i % 2 === 0 ? profile.spark : profile.accent, inverse * 0.62);
+          fx.fillCircle(dotX, dotY, 3.5 + (inverse * 2));
+        }
+      }
+    }
+  }
+
   private drawAimPreview(): void {
     const player = this.getLocalPlayer();
     if (!player || this.snapshot.roundState !== "active") return;
@@ -931,16 +1139,55 @@ export class GameScene extends Phaser.Scene {
 
     this.fixtureSpritesById.set(
       "left-field-flag",
-      this.add.image(0, 0, SPRITE_ATLAS_KEY, SPRITES.flagBlue).setOrigin(0.24, 1).setDepth(12),
+      this.add.image(0, 0, SPRITE_ATLAS_KEY, SPRITES.props.flagBlue).setOrigin(0.24, 1).setDepth(12),
     );
     this.fixtureSpritesById.set(
       "right-field-flag",
-      this.add.image(0, 0, SPRITE_ATLAS_KEY, SPRITES.flagRed).setOrigin(0.24, 1).setDepth(12),
+      this.add.image(0, 0, SPRITE_ATLAS_KEY, SPRITES.props.flagRed).setOrigin(0.24, 1).setDepth(12),
     );
     this.fixtureSpritesById.set(
       "low-center-barrier",
-      this.add.image(0, 0, SPRITE_ATLAS_KEY, SPRITES.barrierStriped).setOrigin(0.5, 1).setDepth(12),
+      this.add.image(0, 0, SPRITE_ATLAS_KEY, SPRITES.props.barrierStriped).setOrigin(0.5, 1).setDepth(12),
     );
+  }
+
+  private createArenaDecorSprites(): void {
+    if (!this.textures.exists(SPRITE_ATLAS_KEY)) return;
+    for (const item of ARENA_DECOR_LAYOUT) {
+      this.arenaDecorSprites.push(
+        this.add
+          .image(item.x, item.y, SPRITE_ATLAS_KEY, item.frame)
+          .setOrigin(0.5, 1)
+          .setScale(item.scale)
+          .setAlpha(item.alpha)
+          .setDepth(item.depth),
+      );
+    }
+  }
+
+  private applyArenaDecorLayout(seedSource: string): void {
+    if (this.arenaDecorSprites.length === 0) return;
+    const seed = hashText(seedSource);
+    const jitter = (index: number, amount: number): number => (seededUnit(index, seed) - 0.5) * amount;
+    const torchSign = seededUnit(11, seed) > 0.5 ? 1 : -1;
+    const layout = [
+      { x: WORLD.width / 2 + jitter(1, 150), y: 112 + jitter(2, 18), scale: 1.02 + (seededUnit(3, seed) * 0.24), alpha: 0.5 },
+      { x: WORLD.width / 2 + jitter(4, 190), y: 270 + jitter(5, 36), scale: 0.58 + (seededUnit(6, seed) * 0.16), alpha: 0.58 },
+      { x: 138 + jitter(7, 54), y: WORLD.groundY - 66 + jitter(8, 14), scale: 0.62 + (seededUnit(9, seed) * 0.13), alpha: 0.9 },
+      { x: 318 + jitter(10, 70), y: WORLD.groundY - 70 + jitter(12, 12), scale: 0.48 + (seededUnit(13, seed) * 0.14), alpha: 0.84 },
+      { x: WORLD.width - 334 + jitter(14, 70), y: WORLD.groundY - 68 + jitter(15, 14), scale: 0.48 + (seededUnit(16, seed) * 0.14), alpha: 0.84 },
+      { x: WORLD.width - 142 + jitter(17, 62), y: WORLD.groundY - 52 + jitter(18, 12), scale: 0.5 + (seededUnit(19, seed) * 0.12), alpha: 0.8 },
+      { x: (WORLD.width / 2) + (torchSign * (220 + (seededUnit(20, seed) * 160))), y: WORLD.groundY - 68, scale: 0.56 + (seededUnit(21, seed) * 0.12), alpha: 0.9 },
+    ];
+
+    this.arenaDecorSprites.forEach((sprite, index) => {
+      const item = layout[index];
+      if (!item) return;
+      sprite
+        .setPosition(item.x, item.y)
+        .setScale(item.scale)
+        .setAlpha(item.alpha);
+    });
   }
 
   private syncFixtureSprite(sprite: Phaser.GameObjects.Image, fixture: CourtFixture): void {
@@ -1006,6 +1253,30 @@ export class GameScene extends Phaser.Scene {
     return true;
   }
 
+  private syncProjectileTrailSprite(projectile: ProjectileView, alpha: number): void {
+    if (!this.textures.exists(SPRITE_ATLAS_KEY)) return;
+    const frame = AMMO_FX_FRAMES[projectile.ammoType].trail;
+    const direction = normalize(projectile.vx, projectile.vy, { x: 1, y: 0 });
+    const distance = Math.max(24, projectile.radius * 3.2);
+    let sprite = this.projectileTrailSpritesById.get(projectile.id);
+    if (!sprite) {
+      sprite = this.add
+        .image(projectile.x, projectile.y, SPRITE_ATLAS_KEY, frame)
+        .setOrigin(0.75, 0.5)
+        .setDepth(23)
+        .setBlendMode(Phaser.BlendModes.ADD);
+      this.projectileTrailSpritesById.set(projectile.id, sprite);
+    }
+
+    sprite
+      .setTexture(SPRITE_ATLAS_KEY, frame)
+      .setPosition(projectile.x - (direction.x * distance), projectile.y - (direction.y * distance))
+      .setRotation(Math.atan2(projectile.vy, projectile.vx))
+      .setScale(projectile.ammoType === "shotput" ? 0.62 : projectile.ammoType === "splitter" ? 0.52 : 0.72)
+      .setAlpha(alpha * 0.68)
+      .setVisible(true);
+  }
+
   private syncAmmoSprite(
     sprite: Phaser.GameObjects.Image,
     ammoType: AmmoType,
@@ -1042,6 +1313,11 @@ export class GameScene extends Phaser.Scene {
       sprite.destroy();
       this.projectileSpritesById.delete(projectileId);
     }
+    for (const [projectileId, sprite] of this.projectileTrailSpritesById.entries()) {
+      if (activeProjectileIds.has(projectileId)) continue;
+      sprite.destroy();
+      this.projectileTrailSpritesById.delete(projectileId);
+    }
   }
 }
 
@@ -1050,6 +1326,25 @@ const lerp = (a: number, b: number, t: number): number => a + ((b - a) * t);
 const easeOutCubic = (value: number): number => 1 - Math.pow(1 - clamp01(value), 3);
 const fract = (value: number): number => value - Math.floor(value);
 const pseudoRandom = (seed: number): number => fract(Math.sin(seed * 12.9898) * 43758.5453);
+const hashText = (value: string): number => {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+};
+const seededUnit = (index: number, seed: number): number => {
+  let value = Math.imul((index + 0x9e3779b9) ^ seed, 0x45d9f3b);
+  value = Math.imul(value ^ (value >>> 16), 0x45d9f3b);
+  value ^= value >>> 16;
+  return (value >>> 0) / 0xffffffff;
+};
+const rgbFromHex = (color: number): { r: number; g: number; b: number } => ({
+  r: (color >> 16) & 0xff,
+  g: (color >> 8) & 0xff,
+  b: color & 0xff,
+});
 const pointAlong = (origin: Vec2, direction: Vec2, distance: number): Vec2 => ({
   x: origin.x + (direction.x * distance),
   y: origin.y + (direction.y * distance),

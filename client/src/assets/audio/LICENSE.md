@@ -7,25 +7,20 @@ Sources:
 - Kenney Impact Sounds: https://kenney.nl/assets/impact-sounds
 - Kenney Interface Sounds: https://kenney.nl/assets/interface-sounds
 - Kenney RPG Audio: https://kenney.nl/assets/rpg-audio
+- Kenney UI Audio: https://kenney.nl/assets/ui-audio
+
+The shipped files are curated variants for Lobbers events:
+
+- `ui-*`: hover, focus, click, host lobby, practice bot, browse, join, ready, rematch, confirm, back, error, and selection cues.
+- `ammo-*`: ammo-specific selection and handling cues.
+- `charge-*` and `throw-*`: charge start and throw release variants.
+- `javelin-*`, `shotput-*`, `splitter-*`, and `fragment-*`: projectile impact and split variants.
+- `player-*`: hit, jump, and step cues.
+- `round-*`: countdown, start, win, and loss stingers.
+- `item-*`: placeholder pickup sounds for future item work.
 
 Selected source files were converted with FFmpeg to mono Opus-in-Ogg assets:
 
 ```powershell
 ffmpeg -y -hide_banner -loglevel error -i INPUT.ogg -vn -map_metadata -1 -ac 1 -ar 24000 -c:a libopus -b:a 18k -vbr on -compression_level 10 -application audio OUTPUT.ogg
 ```
-
-Event mapping:
-
-- `charge-start.ogg`: RPG Audio `beltHandle1.ogg`
-- `throw-release.ogg`: RPG Audio `drawKnife1.ogg`
-- `javelin-impact.ogg`: Impact Sounds `impactWood_light_000.ogg`
-- `shotput-impact.ogg`: Impact Sounds `impactMetal_heavy_001.ogg`
-- `splitter-pop.ogg`: Impact Sounds `impactGlass_light_000.ogg`
-- `fragment-impact.ogg`: Impact Sounds `impactGeneric_light_000.ogg`
-- `player-hit.ogg`: Impact Sounds `impactPunch_heavy_002.ogg`
-- `item-pickup.ogg`: RPG Audio `handleCoins2.ogg`
-- `ui-click.ogg`: Interface Sounds `click_002.ogg`
-- `ui-confirm.ogg`: Interface Sounds `confirmation_001.ogg`
-- `ui-error.ogg`: Interface Sounds `error_004.ogg`
-- `ui-select.ogg`: Interface Sounds `select_001.ogg`
-- `ui-back.ogg`: Interface Sounds `back_001.ogg`

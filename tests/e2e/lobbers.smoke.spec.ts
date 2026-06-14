@@ -25,8 +25,11 @@ test("host and join lobby smoke", async ({ browser }) => {
   await guestPage.close();
 });
 
-test("practice bot smoke", async ({ page }) => {
+test("practice bot smoke", async ({ page }, testInfo) => {
   await page.goto("/");
+  const lobbyScreenshotPath = testInfo.outputPath("lobby-menu.png");
+  await page.screenshot({ path: lobbyScreenshotPath });
+  await testInfo.attach("lobby-menu", { path: lobbyScreenshotPath, contentType: "image/png" });
   await page.getByRole("button", { name: "Practice Bot" }).click();
   await expect(page.locator("#redName")).toContainText("Practice Bot");
   await page.getByRole("button", { name: "Mark Ready" }).click();

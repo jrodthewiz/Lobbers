@@ -1,15 +1,23 @@
 import { AMMO_DEFINITIONS, AMMO_TYPES } from "../../../shared/game/ammo";
 import type { AmmoType, LobbyInfo, Side } from "../../../shared/game/types";
+import spriteAtlasData from "../assets/lobbers-minimal-atlas.json";
+import {
+  AMMO_UI_FRAMES,
+  SPRITES,
+  spriteAtlasImageUrl,
+} from "../game/spriteAtlas";
 import type { GameSnapshot, PlayerView } from "../game/viewModel";
 
 type HudCallbacks = {
   hostLobby: (playerName: string) => void;
   practiceBot: (playerName: string) => void;
-  joinLobby: (code: string, playerName: string) => void;
+  joinLobby: (code: string, playerName: string, source: "input" | "list") => void;
   refreshLobbies: () => void;
   selectAmmo: (ammoType: AmmoType) => void;
   setReady: (ready: boolean) => void;
   rematch: () => void;
+  uiFocus: () => void;
+  uiHover: () => void;
 };
 
 export type HudContext = {
@@ -30,6 +38,27 @@ const hpPercent = (player: PlayerView | null): number => (
   player ? Math.max(0, Math.min(100, player.hp)) : 0
 );
 
+type AtlasFrame = {
+  frame: {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  };
+};
+
+type AtlasData = {
+  frames: Record<string, AtlasFrame>;
+  meta: {
+    size: {
+      w: number;
+      h: number;
+    };
+  };
+};
+
+const ATLAS = spriteAtlasData as AtlasData;
+
 export class Hud {
   private readonly root: HTMLElement;
   private callbacks: HudCallbacks | null = null;
@@ -41,6 +70,7 @@ export class Hud {
     this.root.className = "hud";
     this.root.innerHTML = this.buildMarkup();
     this.bindStaticEvents();
+    this.applyStaticSprites();
   }
 
   setCallbacks(callbacks: HudCallbacks): void {
@@ -81,6 +111,8 @@ export class Hud {
 
     this.setBar("chargeFill", Math.round(context.chargeRatio * 100));
     this.setText("selectedAmmo", AMMO_DEFINITIONS[context.selectedAmmo].label);
+    const selectedAmmoIcon = this.byId<HTMLElement>("selectedAmmoIcon");
+    if (selectedAmmoIcon) this.applySprite(selectedAmmoIcon, AMMO_UI_FRAMES[context.selectedAmmo]);
 
     this.toggle("lobbyPanel", !context.connected);
     this.toggle("waitingPanel", context.connected && snapshot.roundState === "waiting");
@@ -115,12 +147,17 @@ export class Hud {
   private buildMarkup(): string {
     return `
       <section id="lobbyPanel" class="lobby-panel">
+        <span class="ui-sprite menu-corner-prop menu-corner-prop-left" id="menuLeftProp" aria-hidden="true"></span>
+        <span class="ui-sprite menu-corner-prop menu-corner-prop-right" id="menuRightProp" aria-hidden="true"></span>
         <div class="brand-row">
-          <div>
-            <h1>Lobbers</h1>
-            <p>Olympic artillery for two throwers.</p>
+          <div class="title-lockup">
+            <span class="ui-sprite brand-mark" id="brandMark" aria-hidden="true"></span>
+            <div>
+              <h1>Lobbers</h1>
+              <p>Wind up, pick an angle, break the record.</p>
+            </div>
           </div>
-          <div class="status-pill" id="statusText">Offline</div>
+          <div class="status-pill"><span class="ui-sprite pill-icon" id="statusIcon" aria-hidden="true"></span><span id="statusText">Offline</span></div>
         </div>
         <div class="lobby-controls">
           <label>
@@ -128,23 +165,29 @@ export class Hud {
             <input id="playerNameInput" maxlength="18" autocomplete="off" value="Lobber" />
           </label>
           <div class="button-row">
-            <button id="hostButton" type="button">Host Lobby</button>
-            <button id="botButton" type="button">Practice Bot</button>
-            <button id="refreshButton" type="button">Browse Lobbies</button>
+            <button id="hostButton" type="button"><span class="ui-sprite button-icon" id="hostButtonIcon" aria-hidden="true"></span><span>Host Lobby</span></button>
+            <button id="botButton" type="button"><span class="ui-sprite button-icon" id="botButtonIcon" aria-hidden="true"></span><span>Practice Bot</span></button>
+            <button id="refreshButton" type="button"><span class="ui-sprite button-icon" id="refreshButtonIcon" aria-hidden="true"></span><span>Browse Lobbies</span></button>
           </div>
           <label>
             Lobby code
             <input id="joinCodeInput" maxlength="8" autocomplete="off" placeholder="ABC123" />
           </label>
-          <button id="joinButton" type="button">Join By Code</button>
+          <button id="joinButton" class="wide-command" type="button"><span class="ui-sprite button-icon" id="joinButtonIcon" aria-hidden="true"></span><span>Join By Code</span></button>
         </div>
-        <div class="lobby-list" id="lobbyList"></div>
+        <div class="lobby-list">
+          <div class="lobby-list-title">
+            <span class="ui-sprite board-icon" id="lobbyListIcon" aria-hidden="true"></span>
+            <span>Open Lobbies</span>
+          </div>
+          <div class="lobby-list-rows" id="lobbyListRows"></div>
+        </div>
       </section>
 
       <section id="activeHud" class="active-hud">
         <div class="top-strip">
           <div class="player-card blue-side">
-            <span id="blueName">Waiting</span>
+            <span class="player-name-line"><span class="ui-sprite side-flag" id="blueSideIcon" aria-hidden="true"></span><span id="blueName">Waiting</span></span>
             <strong id="blueHpText">0 HP</strong>
             <div class="meter"><span id="blueHpBar"></span></div>
           </div>
@@ -154,7 +197,7 @@ export class Hud {
             <small>Your side: <span id="localSide">-</span></small>
           </div>
           <div class="player-card red-side">
-            <span id="redName">Waiting</span>
+            <span class="player-name-line red-name-line"><span id="redName">Waiting</span><span class="ui-sprite side-flag" id="redSideIcon" aria-hidden="true"></span></span>
             <strong id="redHpText">0 HP</strong>
             <div class="meter"><span id="redHpBar"></span></div>
           </div>
@@ -163,9 +206,9 @@ export class Hud {
         <div class="ammo-strip" id="ammoButtons"></div>
 
         <div class="distance-strip">
-          <span>Ammo <strong id="selectedAmmo">Javelin</strong></span>
-          <span>Last <strong id="lastDistance">0.0 m</strong></span>
-          <span>Best <strong id="bestDistance">0.0 m</strong></span>
+          <span><span class="ui-sprite metric-icon" id="selectedAmmoIcon" aria-hidden="true"></span>Ammo <strong id="selectedAmmo">Javelin</strong></span>
+          <span><span class="ui-sprite metric-icon" id="lastDistanceIcon" aria-hidden="true"></span>Last <strong id="lastDistance">0.0 m</strong></span>
+          <span><span class="ui-sprite metric-icon" id="bestDistanceIcon" aria-hidden="true"></span>Best <strong id="bestDistance">0.0 m</strong></span>
         </div>
 
         <div class="charge-meter">
@@ -174,11 +217,13 @@ export class Hud {
       </section>
 
       <section id="waitingPanel" class="match-panel">
+        <span class="ui-sprite panel-icon" id="waitingPanelIcon" aria-hidden="true"></span>
         <p id="waitingText">Waiting for an opponent.</p>
         <button id="readyButton" type="button">Mark Ready</button>
       </section>
 
       <section id="endedPanel" class="match-panel">
+        <span class="ui-sprite panel-icon" id="endedPanelIcon" aria-hidden="true"></span>
         <h2 id="winnerText">Round ended</h2>
         <p id="rematchText">Request a rematch when ready.</p>
         <button id="rematchButton" type="button">Rematch</button>
@@ -187,6 +232,16 @@ export class Hud {
   }
 
   private bindStaticEvents(): void {
+    this.root.addEventListener("pointerover", (event) => {
+      const button = this.eventButton(event);
+      if (!button || button.disabled || this.isRelatedTargetInside(event, button)) return;
+      this.callbacks?.uiHover();
+    });
+    this.root.addEventListener("focusin", (event) => {
+      const button = this.eventButton(event);
+      if (!button || button.disabled) return;
+      this.callbacks?.uiFocus();
+    });
     this.byId("hostButton")?.addEventListener("click", () => {
       this.callbacks?.hostLobby(this.getPlayerName());
     });
@@ -198,7 +253,7 @@ export class Hud {
     });
     this.byId("joinButton")?.addEventListener("click", () => {
       const code = this.byId<HTMLInputElement>("joinCodeInput")?.value ?? "";
-      this.callbacks?.joinLobby(code, this.getPlayerName());
+      this.callbacks?.joinLobby(code, this.getPlayerName(), "input");
     });
     this.byId("readyButton")?.addEventListener("click", () => {
       this.callbacks?.setReady(true);
@@ -221,13 +276,17 @@ export class Hud {
         button.dataset.ammoType = ammoType;
         button.setAttribute("aria-label", AMMO_DEFINITIONS[ammoType].label);
         button.title = `${AMMO_DEFINITIONS[ammoType].label} (${index + 1})`;
+        const icon = document.createElement("span");
+        icon.className = "ui-sprite ammo-icon";
+        icon.setAttribute("aria-hidden", "true");
+        this.applySprite(icon, AMMO_UI_FRAMES[ammoType]);
         const key = document.createElement("span");
         key.className = "ammo-key";
         key.textContent = String(index + 1);
         const label = document.createElement("span");
         label.className = "ammo-name";
         label.textContent = AMMO_DEFINITIONS[ammoType].label;
-        button.append(key, label);
+        button.append(icon, key, label);
         button.addEventListener("click", () => this.callbacks?.selectAmmo(ammoType));
         container.appendChild(button);
       }
@@ -244,7 +303,7 @@ export class Hud {
   }
 
   private renderLobbyList(lobbies: LobbyInfo[]): void {
-    const container = this.byId("lobbyList");
+    const container = this.byId("lobbyListRows");
     if (!container) return;
     const nextKey = lobbies
       .map((lobby) => `${lobby.code}:${lobby.hostName}:${lobby.playerCount}:${lobby.maxPlayers}:${lobby.roundState}`)
@@ -271,7 +330,7 @@ export class Hud {
       const count = document.createElement("span");
       count.textContent = `${lobby.playerCount}/${lobby.maxPlayers}`;
       button.append(label, count);
-      button.addEventListener("click", () => this.callbacks?.joinLobby(lobby.code, this.getPlayerName()));
+      button.addEventListener("click", () => this.callbacks?.joinLobby(lobby.code, this.getPlayerName(), "list"));
       container.appendChild(button);
     }
   }
@@ -303,5 +362,74 @@ export class Hud {
 
   private byId<T extends HTMLElement = HTMLElement>(id: string): T | null {
     return this.root.querySelector<T>(`#${id}`);
+  }
+
+  private applyStaticSprites(): void {
+    const spriteById: Record<string, string> = {
+      brandMark: SPRITES.ui.medalGold,
+      statusIcon: SPRITES.fx.sparkBlue,
+      hostButtonIcon: SPRITES.props.scoreboard,
+      botButtonIcon: SPRITES.ui.targetRed,
+      refreshButtonIcon: SPRITES.props.equipmentCrate,
+      joinButtonIcon: SPRITES.ui.arrowGold,
+      lobbyListIcon: SPRITES.ui.targetBlue,
+      menuLeftProp: SPRITES.props.rackJavelin,
+      menuRightProp: SPRITES.props.coneStack,
+      blueSideIcon: SPRITES.props.flagBlue,
+      redSideIcon: SPRITES.props.flagRed,
+      selectedAmmoIcon: AMMO_UI_FRAMES.javelin,
+      lastDistanceIcon: SPRITES.ui.targetBlue,
+      bestDistanceIcon: SPRITES.ui.medalGold,
+      waitingPanelIcon: SPRITES.props.pennants,
+      endedPanelIcon: SPRITES.fx.confettiBurst,
+    };
+
+    for (const [id, frameName] of Object.entries(spriteById)) {
+      const element = this.byId(id);
+      if (element) this.applySprite(element, frameName);
+    }
+  }
+
+  private applySprite(element: HTMLElement, frameName: string, scaleOverride?: number): void {
+    const atlasFrame = ATLAS.frames[frameName];
+    if (!atlasFrame) return;
+
+    const maxSize = this.maxSpriteSize(element);
+    const scale = scaleOverride ?? Math.min(1, maxSize.width / atlasFrame.frame.w, maxSize.height / atlasFrame.frame.h);
+    const width = Math.max(1, Math.round(atlasFrame.frame.w * scale));
+    const height = Math.max(1, Math.round(atlasFrame.frame.h * scale));
+
+    element.style.display = "inline-block";
+    element.style.flex = "0 0 auto";
+    element.style.width = `${width}px`;
+    element.style.height = `${height}px`;
+    element.style.backgroundImage = `url("${spriteAtlasImageUrl}")`;
+    element.style.backgroundRepeat = "no-repeat";
+    element.style.backgroundSize = `${Math.round(ATLAS.meta.size.w * scale)}px ${Math.round(ATLAS.meta.size.h * scale)}px`;
+    element.style.backgroundPosition = `${Math.round(-atlasFrame.frame.x * scale)}px ${Math.round(-atlasFrame.frame.y * scale)}px`;
+    element.style.verticalAlign = "middle";
+  }
+
+  private maxSpriteSize(element: HTMLElement): { width: number; height: number } {
+    if (element.classList.contains("brand-mark")) return { width: 54, height: 54 };
+    if (element.classList.contains("menu-corner-prop")) return { width: 82, height: 62 };
+    if (element.classList.contains("panel-icon")) return { width: 38, height: 30 };
+    if (element.classList.contains("button-icon")) return { width: 30, height: 28 };
+    if (element.classList.contains("ammo-icon")) return { width: 34, height: 34 };
+    if (element.classList.contains("board-icon")) return { width: 30, height: 24 };
+    if (element.classList.contains("side-flag")) return { width: 20, height: 26 };
+    if (element.classList.contains("metric-icon")) return { width: 18, height: 18 };
+    if (element.classList.contains("pill-icon")) return { width: 16, height: 16 };
+    return { width: 22, height: 22 };
+  }
+
+  private eventButton(event: Event): HTMLButtonElement | null {
+    if (!(event.target instanceof Element)) return null;
+    const button = event.target.closest("button");
+    return button instanceof HTMLButtonElement && this.root.contains(button) ? button : null;
+  }
+
+  private isRelatedTargetInside(event: PointerEvent, element: HTMLElement): boolean {
+    return event.relatedTarget instanceof Node && element.contains(event.relatedTarget);
   }
 }
