@@ -33,7 +33,7 @@ test("practice bot smoke", async ({ page }) => {
   await expect(page.locator("#roundState")).toContainText(/COUNTDOWN|ACTIVE/);
 });
 
-test("practice controls and combat smoke", async ({ page }) => {
+test("practice controls and combat smoke", async ({ page }, testInfo) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Practice Bot" }).click();
   await page.getByRole("button", { name: "Mark Ready" }).click();
@@ -52,7 +52,23 @@ test("practice controls and combat smoke", async ({ page }) => {
   const jumpY = Number(await page.locator("#hud-root").evaluate((element) => element.dataset.localY ?? "0"));
   expect(jumpY).toBeLessThan(groundY);
 
-  await page.getByRole("button", { name: "Splitter" }).click();
+  await page.keyboard.press("2");
+  await expect(page.locator("#selectedAmmo")).toHaveText("Shotput");
+  await expect(page.locator("#hud-root")).toHaveAttribute("data-selected-ammo", "shotput");
+
+  await page.keyboard.press("q");
+  await expect(page.locator("#selectedAmmo")).toHaveText("Javelin");
+  await expect(page.locator("#hud-root")).toHaveAttribute("data-selected-ammo", "javelin");
+
+  await page.keyboard.press("e");
+  await expect(page.locator("#selectedAmmo")).toHaveText("Shotput");
+  await expect(page.locator("#hud-root")).toHaveAttribute("data-selected-ammo", "shotput");
+
+  await page.keyboard.press("1");
+  await expect(page.locator("#selectedAmmo")).toHaveText("Javelin");
+  await expect(page.locator("#hud-root")).toHaveAttribute("data-selected-ammo", "javelin");
+
+  await page.keyboard.press("3");
   await expect(page.locator("#selectedAmmo")).toHaveText("Splitter");
   await expect(page.locator("#hud-root")).toHaveAttribute("data-selected-ammo", "splitter");
 
@@ -70,4 +86,8 @@ test("practice controls and combat smoke", async ({ page }) => {
     const lastDistance = Number(hud?.dataset.localLastDistance ?? "0");
     return projectileAmmoTypes.split(",").includes("splitter") || lastDistance > 0;
   });
+
+  const screenshotPath = testInfo.outputPath("splitter-fx.png");
+  await page.screenshot({ path: screenshotPath });
+  await testInfo.attach("splitter-fx", { path: screenshotPath, contentType: "image/png" });
 });

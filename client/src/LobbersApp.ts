@@ -1,10 +1,11 @@
 import Phaser from "phaser";
 import { Client, type Room } from "colyseus.js";
-import { AMMO_DEFINITIONS, isAmmoType } from "../../shared/game/ammo";
+import { AMMO_DEFINITIONS, AMMO_TYPES, isAmmoType } from "../../shared/game/ammo";
 import { CHARGE, ROOM_NAME } from "../../shared/game/constants";
 import { CLIENT_MESSAGES } from "../../shared/game/messages";
 import { resolveChargeRatio } from "../../shared/game/math";
 import type { AmmoType, LobbyInfo, Side, Vec2 } from "../../shared/game/types";
+import { GameAudio, type GameSoundKey } from "./audio/GameAudio";
 import { GameScene } from "./game/GameScene";
 import type { GameSnapshot, PlayerView, ProjectileView } from "./game/viewModel";
 import { EMPTY_SNAPSHOT } from "./game/viewModel";
@@ -48,6 +49,10 @@ export class LobbersApp {
   private readonly scene = new GameScene();
   private readonly hud: Hud;
   private readonly client: Client;
+  private readonly audio = new GameAudio();
+  private readonly lastProjectilesById = new Map<string, ProjectileView>();
+  private readonly lastThrowSeqBySessionId = new Map<string, number>();
+  private readonly lastHpBySessionId = new Map<string, number>();
   private readonly serverHttpUrl = resolveHttpBaseUrl();
   private room: Room | null = null;
   private snapshot: GameSnapshot = EMPTY_SNAPSHOT;
@@ -68,6 +73,8 @@ export class LobbersApp {
   }
 
   start(): void {
+    this.audio.preload();
+
     new Phaser.Game({
       type: Phaser.AUTO,
       parent: "game-root",
@@ -88,10 +95,22 @@ export class LobbersApp {
     });
 
     this.hud.setCallbacks({
-      hostLobby: (playerName) => void this.hostLobby(playerName),
-      practiceBot: (playerName) => void this.practiceBot(playerName),
-      joinLobby: (code, playerName) => void this.joinLobby(code, playerName),
-      refreshLobbies: () => void this.refreshLobbies(),
+      hostLobby: (playerName) => {
+        this.audio.play("ui-click");
+        void this.hostLobby(playerName);
+      },
+      practiceBot: (playerName) => {
+        this.audio.play("ui-click");
+        void this.practiceBot(playerName);
+      },
+      joinLobby: (code, playerName) => {
+        this.audio.play("ui-click");
+        void this.joinLobby(code, playerName);
+      },
+      refreshLobbies: () => {
+        this.audio.play("ui-click");
+        void this.refreshLobbies();
+      },
       selectAmmo: (ammoType) => this.selectAmmo(ammoType),
       setReady: (ready) => this.setReady(ready),
       rematch: () => this.rematch(),
@@ -130,6 +149,7 @@ export class LobbersApp {
   private async joinLobby(code: string, playerName: string): Promise<void> {
     const normalized = code.trim().toUpperCase();
     if (!normalized) {
+      this.audio.play("ui-error");
       this.setStatus("Enter a lobby code.");
       return;
     }
@@ -149,6 +169,7 @@ export class LobbersApp {
     try {
       await action();
     } catch (error) {
+      this.audio.play("ui-error");
       this.setStatus(error instanceof Error ? error.message : String(error));
     } finally {
       this.connecting = false;
@@ -159,24 +180,31 @@ export class LobbersApp {
   private attachRoom(room: Room): void {
     this.room = room;
     this.lastSentMoveX = 0;
+    this.resetAudioTracking();
+    this.audio.play("ui-confirm");
     this.scene.setLocalSessionId(room.sessionId);
     this.setStatus(`Connected as ${room.sessionId.slice(0, 4)}`);
     room.onStateChange((state: unknown) => {
-      this.snapshot = this.snapshotFromState(state);
+      const nextSnapshot = this.snapshotFromState(state);
+      this.playSnapshotAudio(nextSnapshot);
+      this.snapshot = nextSnapshot;
       this.scene.setSnapshot(this.snapshot);
       this.render();
     });
     room.onLeave(() => {
       this.setStatus("Disconnected");
       this.room = null;
+      this.resetAudioTracking();
       this.snapshot = EMPTY_SNAPSHOT;
       this.scene.setSnapshot(this.snapshot);
       this.render();
     });
     room.onError((_code: number, message?: string) => {
+      this.audio.play("ui-error");
       this.setStatus(message ?? "Room error");
     });
     this.snapshot = this.snapshotFromState(room.state);
+    this.playSnapshotAudio(this.snapshot);
     this.scene.setSnapshot(this.snapshot);
     this.render();
   }
@@ -197,6 +225,7 @@ export class LobbersApp {
   private chargeStart(): void {
     if (!this.room) return;
     this.chargeStartedAtMs = performance.now();
+    this.audio.play("charge-start");
     this.room.send(CLIENT_MESSAGES.CHARGE_START, {
       ammoType: this.selectedAmmo,
     });
@@ -205,12 +234,14 @@ export class LobbersApp {
   private chargeCancel(): void {
     if (!this.room) return;
     this.chargeStartedAtMs = null;
+    this.audio.play("ui-back");
     this.room.send(CLIENT_MESSAGES.CHARGE_CANCEL);
   }
 
   private throwRelease(aim: Vec2): void {
     if (!this.room) return;
     this.chargeStartedAtMs = null;
+    this.audio.play("throw-release");
     this.room.send(CLIENT_MESSAGES.THROW_RELEASE, {
       aimX: aim.x,
       aimY: aim.y,
@@ -218,6 +249,7 @@ export class LobbersApp {
   }
 
   private selectAmmo(ammoType: AmmoType): void {
+    this.audio.play("ui-select");
     this.selectedAmmo = ammoType;
     this.scene.setSelectedAmmo(ammoType);
     if (this.room) {
@@ -227,16 +259,89 @@ export class LobbersApp {
   }
 
   private setReady(ready: boolean): void {
+    this.audio.play("ui-confirm");
     this.room?.send(CLIENT_MESSAGES.SET_READY, { ready });
   }
 
   private rematch(): void {
+    this.audio.play("ui-confirm");
     this.room?.send(CLIENT_MESSAGES.REMATCH);
+  }
+
+  private playSnapshotAudio(nextSnapshot: GameSnapshot): void {
+    const nextProjectilesById = new Map(nextSnapshot.projectiles.map((projectile) => [projectile.id, projectile]));
+    let impactsPlayed = 0;
+    for (const [id, projectile] of this.lastProjectilesById) {
+      if (nextProjectilesById.has(id) || impactsPlayed >= 3) continue;
+      this.audio.play(this.resolveProjectileImpactSound(projectile));
+      impactsPlayed += 1;
+    }
+
+    let playerDamageDetected = false;
+    for (const player of nextSnapshot.players) {
+      const previousThrowSeq = this.lastThrowSeqBySessionId.get(player.sessionId);
+      if (
+        previousThrowSeq !== undefined
+        && player.throwSeq > previousThrowSeq
+        && player.sessionId !== this.room?.sessionId
+      ) {
+        this.audio.play("throw-release", 0.78);
+      }
+
+      const previousHp = this.lastHpBySessionId.get(player.sessionId);
+      if (previousHp !== undefined && player.hp < previousHp) {
+        playerDamageDetected = true;
+      }
+    }
+
+    if (playerDamageDetected) {
+      this.audio.play("player-hit", 0.72);
+    }
+
+    this.lastProjectilesById.clear();
+    for (const projectile of nextSnapshot.projectiles) {
+      this.lastProjectilesById.set(projectile.id, projectile);
+    }
+
+    this.lastThrowSeqBySessionId.clear();
+    this.lastHpBySessionId.clear();
+    for (const player of nextSnapshot.players) {
+      this.lastThrowSeqBySessionId.set(player.sessionId, player.throwSeq);
+      this.lastHpBySessionId.set(player.sessionId, player.hp);
+    }
+  }
+
+  private resolveProjectileImpactSound(projectile: ProjectileView): GameSoundKey {
+    if (projectile.ammoType === "shotput") return "shotput-impact";
+    if (projectile.ammoType === "splitter") {
+      return projectile.radius < AMMO_DEFINITIONS.splitter.radius ? "fragment-impact" : "splitter-pop";
+    }
+    return "javelin-impact";
+  }
+
+  private resetAudioTracking(): void {
+    this.lastProjectilesById.clear();
+    this.lastThrowSeqBySessionId.clear();
+    this.lastHpBySessionId.clear();
   }
 
   private handleKeyDown(event: KeyboardEvent): void {
     if (this.isTypingTarget(event.target)) return;
     const key = event.key.toLowerCase();
+    const ammoType = this.ammoFromShortcut(key);
+
+    if (ammoType) {
+      event.preventDefault();
+      this.selectAmmo(ammoType);
+      return;
+    }
+
+    if ((key === "q" || key === "e") && !event.repeat) {
+      event.preventDefault();
+      this.cycleAmmo(key === "e" ? 1 : -1);
+      return;
+    }
+
     let changed = false;
 
     if (key === "a" || key === "arrowleft") {
@@ -255,6 +360,20 @@ export class LobbersApp {
       event.preventDefault();
       this.sendMoveInput(false);
     }
+  }
+
+  private ammoFromShortcut(key: string): AmmoType | null {
+    if (key === "1") return "javelin";
+    if (key === "2") return "shotput";
+    if (key === "3") return "splitter";
+    return null;
+  }
+
+  private cycleAmmo(direction: -1 | 1): void {
+    const currentIndex = AMMO_TYPES.indexOf(this.selectedAmmo);
+    const nextIndex = (currentIndex + direction + AMMO_TYPES.length) % AMMO_TYPES.length;
+    const nextAmmo = AMMO_TYPES[nextIndex];
+    if (nextAmmo) this.selectAmmo(nextAmmo);
   }
 
   private handleKeyUp(event: KeyboardEvent): void {

@@ -214,12 +214,20 @@ export class Hud {
 
     if (!this.ammoButtonsInitialized || container.childElementCount !== AMMO_TYPES.length) {
       container.replaceChildren();
-      for (const ammoType of AMMO_TYPES) {
+      for (const [index, ammoType] of AMMO_TYPES.entries()) {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "ammo-button";
         button.dataset.ammoType = ammoType;
-        button.textContent = AMMO_DEFINITIONS[ammoType].label;
+        button.setAttribute("aria-label", AMMO_DEFINITIONS[ammoType].label);
+        button.title = `${AMMO_DEFINITIONS[ammoType].label} (${index + 1})`;
+        const key = document.createElement("span");
+        key.className = "ammo-key";
+        key.textContent = String(index + 1);
+        const label = document.createElement("span");
+        label.className = "ammo-name";
+        label.textContent = AMMO_DEFINITIONS[ammoType].label;
+        button.append(key, label);
         button.addEventListener("click", () => this.callbacks?.selectAmmo(ammoType));
         container.appendChild(button);
       }

@@ -1,0 +1,134 @@
+{
+  "frames": {
+    "ammo/javelin": {
+      "frame": {
+        "x": 4,
+        "y": 4,
+        "w": 114,
+        "h": 121
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 114,
+        "h": 121
+      },
+      "sourceSize": {
+        "w": 114,
+        "h": 121
+      }
+    },
+    "ammo/shotput": {
+      "frame": {
+        "x": 122,
+        "y": 4,
+        "w": 113,
+        "h": 111
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 113,
+        "h": 111
+      },
+      "sourceSize": {
+        "w": 113,
+        "h": 111
+      }
+    },
+    "ammo/splitter": {
+      "frame": {
+        "x": 239,
+        "y": 4,
+        "w": 103,
+        "h": 68
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 103,
+        "h": 68
+      },
+      "sourceSize": {
+        "w": 103,
+        "h": 68
+      }
+    },
+    "props/barrier-striped": {
+      "frame": {
+        "x": 346,
+        "y": 4,
+        "w": 131,
+        "h": 63
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 131,
+        "h": 63
+      },
+      "sourceSize": {
+        "w": 131,
+        "h": 63
+      }
+    },
+    "props/flag-blue": {
+      "frame": {
+        "x": 4,
+        "y": 129,
+        "w": 51,
+        "h": 114
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 51,
+        "h": 114
+      },
+      "sourceSize": {
+        "w": 51,
+        "h": 114
+      }
+    },
+    "props/flag-red": {
+      "frame": {
+        "x": 59,
+        "y": 129,
+        "w": 50,
+        "h": 114
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 50,
+        "h": 114
+      },
+      "sourceSize": {
+        "w": 50,
+        "h": 114
+      }
+    }
+  },
+  "meta": {
+    "app": "scripts/build_minimal_sprite_atlas.py",
+    "image": "lobbers-minimal-atlas.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 512,
+      "h": 256
+    },
+    "scale": "1"
+  }
+}

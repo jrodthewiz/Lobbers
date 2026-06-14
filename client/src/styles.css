@@ -290,12 +290,42 @@ input:focus {
 
 .ammo-button {
   min-width: 92px;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
   padding: 0 12px;
+  text-align: left;
+}
+
+.ammo-key {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid rgba(250, 204, 21, 0.36);
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--gold);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.ammo-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ammo-button.selected {
   border-color: rgba(250, 204, 21, 0.9);
   color: var(--gold);
+}
+
+.ammo-button.selected .ammo-key {
+  background: rgba(250, 204, 21, 0.18);
+  box-shadow: 0 0 16px rgba(250, 204, 21, 0.35);
 }
 
 .distance-strip {

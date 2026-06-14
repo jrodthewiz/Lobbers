@@ -1,5 +1,7 @@
 import Phaser from "phaser";
-import { AMMO_DEFINITIONS, getAmmoDefinition } from "../../../shared/game/ammo";
+import spriteAtlasJsonUrl from "../assets/lobbers-minimal-atlas.json?url";
+import spriteAtlasImageUrl from "../assets/lobbers-minimal-atlas.png";
+import { getAmmoDefinition } from "../../../shared/game/ammo";
 import { buildProjectilePhysicsProfile } from "../../../shared/game/ballistics";
 import { COURT_FIXTURES } from "../../../shared/game/fixtures";
 import { CHARGE, SIDE_SIGN, WORLD } from "../../../shared/game/constants";
@@ -13,9 +15,9 @@ import {
   resolveShoulderPosition,
   resolveThrowHandPosition,
 } from "../../../shared/game/math";
-import type { AmmoType, Side, Vec2 } from "../../../shared/game/types";
+import type { AmmoType, CourtFixture, Side, Vec2 } from "../../../shared/game/types";
 import { ProceduralBackground } from "./ProceduralBackground";
-import type { GameSnapshot, PlayerView } from "./viewModel";
+import type { GameSnapshot, PlayerView, ProjectileView } from "./viewModel";
 import { EMPTY_SNAPSHOT } from "./viewModel";
 
 type GameSceneCallbacks = {
@@ -31,6 +33,16 @@ type ArmPose = {
   gearAngle: number;
   chargeRatio: number;
   releaseProgress: number;
+};
+
+type AmmoFxProfile = {
+  core: number;
+  glow: number;
+  hot: number;
+  shadow: number;
+  spark: number;
+  accent: number;
+  particleCount: number;
 };
 
 const COLORS = {
@@ -52,18 +64,61 @@ const COLORS = {
   preview: 0xfef3c7,
 } as const;
 
+const AMMO_FX: Record<AmmoType, AmmoFxProfile> = {
+  javelin: {
+    core: COLORS.javelin,
+    glow: 0xfff1a8,
+    hot: 0xffffff,
+    shadow: 0x713f12,
+    spark: 0xf97316,
+    accent: COLORS.flagBlue,
+    particleCount: 9,
+  },
+  shotput: {
+    core: COLORS.shotput,
+    glow: 0x93c5fd,
+    hot: 0xffffff,
+    shadow: 0x334155,
+    spark: 0x60a5fa,
+    accent: COLORS.flagRed,
+    particleCount: 11,
+  },
+  splitter: {
+    core: COLORS.splitter,
+    glow: 0xa7f3d0,
+    hot: 0xf0fdf4,
+    shadow: 0x064e3b,
+    spark: 0xf0abfc,
+    accent: 0x22d3ee,
+    particleCount: 13,
+  },
+};
+
 const colorForSide = (side: Side): number => (side === "blue" ? COLORS.blue : COLORS.red);
 const lightColorForSide = (side: Side): number => (side === "blue" ? COLORS.blueLight : COLORS.redLight);
 
-const colorForAmmo = (ammoType: AmmoType): number => {
-  if (ammoType === "shotput") return COLORS.shotput;
-  if (ammoType === "splitter") return COLORS.splitter;
-  return COLORS.javelin;
+const SPRITE_ATLAS_KEY = "lobbers-minimal-atlas";
+const SPRITES = {
+  ammoJavelin: "ammo/javelin",
+  ammoShotput: "ammo/shotput",
+  ammoSplitter: "ammo/splitter",
+  barrierStriped: "props/barrier-striped",
+  flagBlue: "props/flag-blue",
+  flagRed: "props/flag-red",
+} as const;
+
+const AMMO_SPRITE_FRAMES: Record<AmmoType, string> = {
+  javelin: SPRITES.ammoJavelin,
+  shotput: SPRITES.ammoShotput,
+  splitter: SPRITES.ammoSplitter,
 };
+
+const colorForAmmo = (ammoType: AmmoType): number => AMMO_FX[ammoType].core;
 
 export class GameScene extends Phaser.Scene {
   private background!: ProceduralBackground;
   private graphics!: Phaser.GameObjects.Graphics;
+  private fxGraphics!: Phaser.GameObjects.Graphics;
   private snapshot: GameSnapshot = EMPTY_SNAPSHOT;
   private localSessionId = "";
   private selectedAmmo: AmmoType = "javelin";
@@ -72,15 +127,30 @@ export class GameScene extends Phaser.Scene {
   private chargingStartedAtMs: number | null = null;
   private readonly lastThrowSeqBySessionId = new Map<string, number>();
   private readonly throwAnimationStartedAtBySessionId = new Map<string, number>();
+  private readonly fixtureSpritesById = new Map<string, Phaser.GameObjects.Image>();
+  private readonly projectileSpritesById = new Map<string, Phaser.GameObjects.Image>();
+  private heldAmmoSprite: Phaser.GameObjects.Image | null = null;
 
   constructor() {
     super("GameScene");
   }
 
+  preload(): void {
+    this.load.atlas(SPRITE_ATLAS_KEY, spriteAtlasImageUrl, spriteAtlasJsonUrl);
+  }
+
   create(): void {
     this.background = new ProceduralBackground(this);
     this.background.create();
-    this.graphics = this.add.graphics();
+    this.graphics = this.add.graphics().setDepth(10);
+    this.fxGraphics = this.add.graphics().setDepth(22);
+    this.fxGraphics.setBlendMode(Phaser.BlendModes.ADD);
+    this.createFixtureSprites();
+    this.heldAmmoSprite = this.add
+      .image(0, 0, SPRITE_ATLAS_KEY, SPRITES.ammoJavelin)
+      .setOrigin(0.5)
+      .setDepth(26)
+      .setVisible(false);
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => this.handlePointerDown(pointer));
     this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => this.handlePointerMove(pointer));
     this.input.on("pointerup", (pointer: Phaser.Input.Pointer) => this.handlePointerUp(pointer));
@@ -166,7 +236,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   private draw(): void {
+    this.heldAmmoSprite?.setVisible(false);
     this.graphics.clear();
+    this.fxGraphics.clear();
     this.drawCourt();
     this.drawFixtures();
     this.drawPlayers();
@@ -208,6 +280,12 @@ export class GameScene extends Phaser.Scene {
   private drawFixtures(): void {
     const g = this.graphics;
     for (const fixture of COURT_FIXTURES) {
+      const sprite = this.fixtureSpritesById.get(fixture.id);
+      if (sprite) {
+        this.syncFixtureSprite(sprite, fixture);
+        continue;
+      }
+
       if (fixture.kind === "flag") {
         const color = fixture.x < WORLD.width / 2 ? COLORS.flagBlue : COLORS.flagRed;
         g.fillStyle(color, 1);
@@ -348,9 +426,11 @@ export class GameScene extends Phaser.Scene {
 
     g.fillStyle(metalColor, 1);
     g.fillCircle(pose.hand.x, pose.hand.y, 6);
+    this.drawAmmoLauncher(heldAmmoType, pose, aim, player.connected);
 
     if (player.charging || (player.sessionId === this.localSessionId && this.chargingStartedAtMs !== null)) {
-      this.drawAmmoShape(
+      this.drawHeldAmmoChargeFx(heldAmmoType, pose.hand, aim, pose.chargeRatio);
+      const renderedSprite = this.syncHeldAmmoSprite(
         heldAmmoType,
         pose.hand.x,
         pose.hand.y,
@@ -359,12 +439,172 @@ export class GameScene extends Phaser.Scene {
         aim.y,
         0.96,
       );
+      if (!renderedSprite) {
+        this.drawAmmoShape(
+          heldAmmoType,
+          pose.hand.x,
+          pose.hand.y,
+          Math.max(5, heldAmmo.radius),
+          aim.x,
+          aim.y,
+          0.96,
+        );
+      }
     }
 
     if (pose.releaseProgress > 0) {
       g.lineStyle(3, COLORS.preview, 0.45 * (1 - pose.releaseProgress));
       g.strokeCircle(pose.elbow.x, pose.elbow.y, WORLD.elbowGearRadius + (pose.releaseProgress * 22));
     }
+  }
+
+  private drawAmmoLauncher(ammoType: AmmoType, pose: ArmPose, aim: Vec2, connected: boolean): void {
+    const g = this.graphics;
+    const fx = this.fxGraphics;
+    const profile = AMMO_FX[ammoType];
+    const alpha = connected ? 1 : 0.42;
+    const direction = normalize(aim.x, aim.y, { x: 1, y: 0 });
+    const normal = { x: -direction.y, y: direction.x };
+    const time = performance.now();
+    const pulse = 0.5 + (Math.sin(time * 0.012) * 0.5);
+    const releaseBoost = pose.releaseProgress > 0 ? 1 - pose.releaseProgress : 0;
+    const intensity = clamp01(0.2 + (pose.chargeRatio * 0.68) + (releaseBoost * 0.9) + (pulse * 0.1));
+    const hand = pose.hand;
+
+    if (ammoType === "javelin") {
+      const back = pointAlong(hand, direction, -22);
+      const front = pointAlong(hand, direction, 54);
+      const tip = pointAlong(front, direction, 12);
+
+      g.lineStyle(8, profile.shadow, 0.88 * alpha);
+      g.beginPath();
+      g.moveTo(back.x, back.y);
+      g.lineTo(front.x, front.y);
+      g.strokePath();
+
+      for (const offset of [-5, 5]) {
+        g.lineStyle(3, profile.core, 0.95 * alpha);
+        g.beginPath();
+        g.moveTo(back.x + (normal.x * offset), back.y + (normal.y * offset));
+        g.lineTo(front.x + (normal.x * offset), front.y + (normal.y * offset));
+        g.strokePath();
+      }
+
+      g.fillStyle(profile.hot, 0.95 * alpha);
+      g.fillTriangle(
+        tip.x,
+        tip.y,
+        front.x + (normal.x * 8),
+        front.y + (normal.y * 8),
+        front.x - (normal.x * 8),
+        front.y - (normal.y * 8),
+      );
+      fx.lineStyle(10, profile.glow, (0.1 + (intensity * 0.24)) * alpha);
+      fx.beginPath();
+      fx.moveTo(back.x, back.y);
+      fx.lineTo(tip.x, tip.y);
+      fx.strokePath();
+      fx.lineStyle(2, profile.hot, (0.35 + (intensity * 0.4)) * alpha);
+      fx.strokeCircle(front.x, front.y, 8 + (pose.chargeRatio * 12));
+      return;
+    }
+
+    if (ammoType === "shotput") {
+      const back = pointAlong(hand, direction, -28);
+      const front = pointAlong(hand, direction, 38);
+      const boreRadius = 13 + (pose.chargeRatio * 5);
+
+      g.lineStyle(24, 0x0f172a, 0.9 * alpha);
+      g.beginPath();
+      g.moveTo(back.x, back.y);
+      g.lineTo(front.x, front.y);
+      g.strokePath();
+      g.lineStyle(17, profile.shadow, alpha);
+      g.beginPath();
+      g.moveTo(back.x, back.y);
+      g.lineTo(front.x, front.y);
+      g.strokePath();
+      g.lineStyle(5, profile.core, 0.88 * alpha);
+      g.beginPath();
+      g.moveTo(back.x + (normal.x * 8), back.y + (normal.y * 8));
+      g.lineTo(front.x + (normal.x * 8), front.y + (normal.y * 8));
+      g.moveTo(back.x - (normal.x * 8), back.y - (normal.y * 8));
+      g.lineTo(front.x - (normal.x * 8), front.y - (normal.y * 8));
+      g.strokePath();
+      g.fillStyle(0x020617, alpha);
+      g.fillCircle(front.x, front.y, boreRadius);
+      g.lineStyle(4, profile.hot, (0.7 + (pose.chargeRatio * 0.3)) * alpha);
+      g.strokeCircle(front.x, front.y, boreRadius);
+
+      fx.fillStyle(profile.glow, (0.08 + (intensity * 0.18)) * alpha);
+      fx.fillCircle(front.x, front.y, 22 + (pose.chargeRatio * 24));
+      for (let i = 0; i < 3; i += 1) {
+        fx.lineStyle(2, i === 1 ? profile.hot : profile.glow, (0.18 + (intensity * 0.26)) * alpha * (1 - (i * 0.2)));
+        fx.strokeCircle(front.x, front.y, boreRadius + 7 + (i * 9) + (pulse * 7));
+      }
+      return;
+    }
+
+    const hub = pointAlong(hand, direction, -12);
+    const front = pointAlong(hand, direction, 42);
+    const branchOffsets = [-11, 0, 11];
+
+    g.fillStyle(0x052e2b, 0.9 * alpha);
+    g.fillCircle(hub.x, hub.y, 13);
+    g.lineStyle(4, profile.core, 0.92 * alpha);
+    g.strokeCircle(hub.x, hub.y, 12);
+    for (const offset of branchOffsets) {
+      const tip = {
+        x: front.x + (normal.x * offset),
+        y: front.y + (normal.y * offset),
+      };
+      g.lineStyle(offset === 0 ? 7 : 5, offset === 0 ? profile.core : profile.accent, 0.94 * alpha);
+      g.beginPath();
+      g.moveTo(hub.x, hub.y);
+      g.lineTo(tip.x, tip.y);
+      g.strokePath();
+      fx.lineStyle(offset === 0 ? 9 : 6, offset === 0 ? profile.glow : profile.spark, (0.09 + (intensity * 0.18)) * alpha);
+      fx.beginPath();
+      fx.moveTo(hub.x, hub.y);
+      fx.lineTo(tip.x, tip.y);
+      fx.strokePath();
+      fx.fillStyle(offset === 0 ? profile.hot : profile.spark, (0.26 + (intensity * 0.36)) * alpha);
+      fx.fillCircle(tip.x, tip.y, 4 + (pose.chargeRatio * 5));
+    }
+
+    for (let i = 0; i < 3; i += 1) {
+      const orbit = (time * 0.004) + ((Math.PI * 2 * i) / 3);
+      fx.fillStyle(i === 1 ? profile.spark : profile.hot, (0.22 + (intensity * 0.36)) * alpha);
+      fx.fillCircle(
+        hub.x + (Math.cos(orbit) * (16 + (pose.chargeRatio * 7))),
+        hub.y + (Math.sin(orbit) * (16 + (pose.chargeRatio * 7))),
+        2.5 + (pose.chargeRatio * 2.5),
+      );
+    }
+  }
+
+  private drawHeldAmmoChargeFx(ammoType: AmmoType, hand: Vec2, aim: Vec2, chargeRatio: number): void {
+    const profile = AMMO_FX[ammoType];
+    const fx = this.fxGraphics;
+    const direction = normalize(aim.x, aim.y, { x: 1, y: 0 });
+    const time = performance.now();
+    const pulse = 0.5 + (Math.sin(time * 0.018) * 0.5);
+    const radius = ammoType === "shotput" ? 24 : ammoType === "splitter" ? 20 : 16;
+
+    fx.fillStyle(profile.glow, 0.1 + (chargeRatio * 0.2));
+    fx.fillCircle(hand.x, hand.y, radius + (chargeRatio * 22) + (pulse * 5));
+    fx.lineStyle(2, profile.hot, 0.32 + (chargeRatio * 0.42));
+    fx.strokeCircle(hand.x, hand.y, radius + (chargeRatio * 18));
+    this.drawEnergyParticles(
+      ammoType,
+      hand.x,
+      hand.y,
+      direction.x,
+      direction.y,
+      radius,
+      0.75 + chargeRatio,
+      0.88,
+    );
   }
 
   private drawGear(center: Vec2, angle: number, chargeRatio: number, connected: boolean): void {
@@ -393,15 +633,13 @@ export class GameScene extends Phaser.Scene {
 
   private drawProjectiles(): void {
     const g = this.graphics;
+    const activeProjectileIds = new Set<string>();
+
     for (const projectile of this.snapshot.projectiles) {
+      activeProjectileIds.add(projectile.id);
       const alpha = projectile.alive ? 1 : 0.4;
       const color = colorForAmmo(projectile.ammoType);
-      g.lineStyle(projectile.ammoType === "javelin" ? 2 : 3, color, 0.28);
-      g.beginPath();
-      g.moveTo(projectile.x, projectile.y);
-      g.lineTo(projectile.x - (projectile.vx * 0.045), projectile.y - (projectile.vy * 0.045));
-      g.strokePath();
-      this.drawAmmoShape(
+      this.drawProjectileFx(
         projectile.ammoType,
         projectile.x,
         projectile.y,
@@ -410,7 +648,25 @@ export class GameScene extends Phaser.Scene {
         projectile.vy,
         alpha,
       );
+      g.lineStyle(projectile.ammoType === "javelin" ? 2 : 3, color, 0.28);
+      g.beginPath();
+      g.moveTo(projectile.x, projectile.y);
+      g.lineTo(projectile.x - (projectile.vx * 0.045), projectile.y - (projectile.vy * 0.045));
+      g.strokePath();
+      if (!this.syncProjectileSprite(projectile, alpha)) {
+        this.drawAmmoShape(
+          projectile.ammoType,
+          projectile.x,
+          projectile.y,
+          projectile.radius,
+          projectile.vx,
+          projectile.vy,
+          alpha,
+        );
+      }
     }
+
+    this.destroyInactiveProjectileSprites(activeProjectileIds);
   }
 
   private drawAmmoShape(
@@ -423,7 +679,9 @@ export class GameScene extends Phaser.Scene {
     alpha: number,
   ): void {
     const g = this.graphics;
+    const fx = this.fxGraphics;
     const color = colorForAmmo(ammoType);
+    const profile = AMMO_FX[ammoType];
     const angle = Math.atan2(vy, vx);
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
@@ -436,6 +694,13 @@ export class GameScene extends Phaser.Scene {
       const tipY = y + (sin * length * 0.54);
       const wingX = x - (cos * length * 0.18);
       const wingY = y - (sin * length * 0.18);
+      fx.lineStyle(Math.max(8, radius * 2.3), profile.glow, alpha * 0.18);
+      fx.beginPath();
+      fx.moveTo(backX, backY);
+      fx.lineTo(tipX, tipY);
+      fx.strokePath();
+      fx.fillStyle(profile.hot, alpha * 0.52);
+      fx.fillCircle(tipX, tipY, Math.max(5, radius * 1.7));
       g.lineStyle(Math.max(3, radius * 0.7), color, alpha);
       g.beginPath();
       g.moveTo(backX, backY);
@@ -454,6 +719,10 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (ammoType === "shotput") {
+      fx.fillStyle(profile.glow, alpha * 0.14);
+      fx.fillCircle(x, y, radius * 2.55);
+      fx.lineStyle(2, profile.hot, alpha * 0.26);
+      fx.strokeCircle(x, y, radius * 1.72);
       g.fillStyle(color, alpha);
       g.fillCircle(x, y, radius);
       g.lineStyle(3, 0x475569, alpha * 0.7);
@@ -463,6 +732,10 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    fx.fillStyle(profile.glow, alpha * 0.16);
+    fx.fillCircle(x, y, radius * 2.3);
+    fx.lineStyle(2, profile.spark, alpha * 0.36);
+    fx.strokeCircle(x, y, radius * 1.75);
     g.fillStyle(color, alpha);
     g.fillCircle(x, y, radius);
     g.lineStyle(2, 0xecfdf5, alpha * 0.78);
@@ -474,6 +747,114 @@ export class GameScene extends Phaser.Scene {
       g.moveTo(x, y);
       g.lineTo(x + (Math.cos(spoke) * radius * 0.9), y + (Math.sin(spoke) * radius * 0.9));
       g.strokePath();
+    }
+  }
+
+  private drawProjectileFx(
+    ammoType: AmmoType,
+    x: number,
+    y: number,
+    radius: number,
+    vx: number,
+    vy: number,
+    alpha: number,
+  ): void {
+    const fx = this.fxGraphics;
+    const profile = AMMO_FX[ammoType];
+    const direction = normalize(vx, vy, { x: 1, y: 0 });
+    const speedRatio = clamp01(Math.hypot(vx, vy) / 1120);
+    const normal = { x: -direction.y, y: direction.x };
+    const trail = Math.max(radius * 3, 28 + (speedRatio * 62));
+    const tail = pointAlong({ x, y }, direction, -trail);
+    const time = performance.now();
+    const pulse = 0.5 + (Math.sin(time * 0.018) * 0.5);
+
+    if (ammoType === "javelin") {
+      fx.lineStyle(Math.max(9, radius * 3), profile.glow, alpha * (0.18 + (speedRatio * 0.16)));
+      fx.beginPath();
+      fx.moveTo(x, y);
+      fx.lineTo(tail.x, tail.y);
+      fx.strokePath();
+      fx.lineStyle(Math.max(3, radius * 0.9), profile.hot, alpha * (0.38 + (speedRatio * 0.24)));
+      fx.beginPath();
+      fx.moveTo(x, y);
+      fx.lineTo(
+        tail.x + (normal.x * Math.sin(time * 0.016) * 5),
+        tail.y + (normal.y * Math.sin(time * 0.016) * 5),
+      );
+      fx.strokePath();
+      this.drawEnergyParticles(ammoType, x, y, vx, vy, radius, 0.8 + speedRatio, alpha);
+      return;
+    }
+
+    if (ammoType === "shotput") {
+      fx.fillStyle(profile.glow, alpha * (0.12 + (speedRatio * 0.14)));
+      fx.fillCircle(x, y, radius * (2.2 + (speedRatio * 0.8)));
+      fx.lineStyle(3, profile.hot, alpha * (0.22 + (pulse * 0.28)));
+      fx.strokeCircle(x, y, radius * (1.6 + (speedRatio * 0.8)));
+      fx.lineStyle(5, profile.spark, alpha * 0.18);
+      fx.beginPath();
+      fx.moveTo(x - (direction.x * radius * 0.6), y - (direction.y * radius * 0.6));
+      fx.lineTo(tail.x, tail.y);
+      fx.strokePath();
+      this.drawEnergyParticles(ammoType, x, y, vx, vy, radius, 0.72 + (speedRatio * 0.82), alpha);
+      return;
+    }
+
+    fx.fillStyle(profile.glow, alpha * (0.12 + (pulse * 0.08)));
+    fx.fillCircle(x, y, radius * (2.5 + (speedRatio * 0.7)));
+    for (let i = 0; i < 3; i += 1) {
+      const angle = (time * 0.008) + ((Math.PI * 2 * i) / 3);
+      const orbit = radius * (2.1 + (speedRatio * 0.7));
+      fx.fillStyle(i === 1 ? profile.spark : profile.hot, alpha * 0.38);
+      fx.fillCircle(x + (Math.cos(angle) * orbit), y + (Math.sin(angle) * orbit), Math.max(2, radius * 0.32));
+      fx.lineStyle(2, i === 1 ? profile.spark : profile.accent, alpha * 0.26);
+      fx.beginPath();
+      fx.moveTo(x, y);
+      fx.lineTo(x + (Math.cos(angle) * orbit), y + (Math.sin(angle) * orbit));
+      fx.strokePath();
+    }
+    this.drawEnergyParticles(ammoType, x, y, vx, vy, radius, 0.9 + speedRatio, alpha);
+  }
+
+  private drawEnergyParticles(
+    ammoType: AmmoType,
+    x: number,
+    y: number,
+    vx: number,
+    vy: number,
+    radius: number,
+    intensity: number,
+    alpha: number,
+  ): void {
+    const fx = this.fxGraphics;
+    const profile = AMMO_FX[ammoType];
+    const direction = normalize(vx, vy, { x: 1, y: 0 });
+    const baseAngle = Math.atan2(direction.y, direction.x);
+    const count = Math.max(4, Math.round(profile.particleCount * clamp01(intensity)));
+    const time = performance.now() * 0.003;
+    const spreadScale = ammoType === "splitter" ? 1.35 : ammoType === "shotput" ? 1.05 : 0.72;
+    const tailLength = Math.max(radius * 3, ammoType === "javelin" ? 70 : ammoType === "shotput" ? 46 : 54);
+
+    for (let i = 0; i < count; i += 1) {
+      const seed = (i + 1) * (ammoType === "javelin" ? 13.7 : ammoType === "shotput" ? 19.3 : 23.9);
+      const phase = fract((time * (ammoType === "shotput" ? 0.7 : 1.1)) + pseudoRandom(seed));
+      const spread = (pseudoRandom(seed + 5.1) - 0.5) * spreadScale;
+      const angle = baseAngle + Math.PI + spread;
+      const distance = radius + (phase * tailLength * (0.65 + clamp01(intensity)));
+      const particleX = x + (Math.cos(angle) * distance);
+      const particleY = y + (Math.sin(angle) * distance);
+      const lineLength = 5 + (pseudoRandom(seed + 11.2) * 18 * clamp01(intensity));
+      const particleAlpha = alpha * (1 - phase) * (0.3 + (0.55 * clamp01(intensity)));
+      const color = i % 4 === 0 ? profile.hot : i % 3 === 0 ? profile.spark : profile.glow;
+
+      fx.lineStyle(ammoType === "shotput" ? 3 : 2, color, particleAlpha);
+      fx.beginPath();
+      fx.moveTo(particleX, particleY);
+      fx.lineTo(particleX + (Math.cos(angle) * lineLength), particleY + (Math.sin(angle) * lineLength));
+      fx.strokePath();
+      fx.fillStyle(color, particleAlpha * 0.86);
+      fx.fillCircle(particleX, particleY, ammoType === "splitter" ? 2.8 : 2.2);
     }
   }
 
@@ -511,6 +892,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (isCharging) {
+      this.drawAimChargePreview(this.selectedAmmo, hand, this.pointerAim, ratio);
       g.lineStyle(5, colorForAmmo(this.selectedAmmo), 0.85);
       g.beginPath();
       g.moveTo(hand.x, hand.y);
@@ -518,8 +900,157 @@ export class GameScene extends Phaser.Scene {
       g.strokePath();
     }
   }
+
+  private drawAimChargePreview(ammoType: AmmoType, hand: Vec2, aim: Vec2, chargeRatio: number): void {
+    const fx = this.fxGraphics;
+    const profile = AMMO_FX[ammoType];
+    const direction = normalize(aim.x, aim.y, { x: 1, y: 0 });
+    const normal = { x: -direction.y, y: direction.x };
+    const reach = 72 + (chargeRatio * 74);
+    const end = pointAlong(hand, direction, reach);
+    const time = performance.now();
+    const wobble = Math.sin(time * 0.018) * (ammoType === "splitter" ? 12 : 5);
+
+    fx.lineStyle(ammoType === "shotput" ? 14 : 8, profile.glow, 0.12 + (chargeRatio * 0.18));
+    fx.beginPath();
+    fx.moveTo(hand.x, hand.y);
+    fx.lineTo(end.x, end.y);
+    fx.strokePath();
+    fx.lineStyle(ammoType === "javelin" ? 3 : 2, profile.hot, 0.32 + (chargeRatio * 0.38));
+    fx.beginPath();
+    fx.moveTo(hand.x + (normal.x * wobble), hand.y + (normal.y * wobble));
+    fx.lineTo(end.x - (normal.x * wobble), end.y - (normal.y * wobble));
+    fx.strokePath();
+    fx.fillStyle(profile.hot, 0.24 + (chargeRatio * 0.36));
+    fx.fillCircle(end.x, end.y, ammoType === "shotput" ? 10 + (chargeRatio * 11) : 6 + (chargeRatio * 8));
+    this.drawEnergyParticles(ammoType, end.x, end.y, direction.x, direction.y, 14, 0.8 + chargeRatio, 0.82);
+  }
+
+  private createFixtureSprites(): void {
+    if (!this.textures.exists(SPRITE_ATLAS_KEY)) return;
+
+    this.fixtureSpritesById.set(
+      "left-field-flag",
+      this.add.image(0, 0, SPRITE_ATLAS_KEY, SPRITES.flagBlue).setOrigin(0.24, 1).setDepth(12),
+    );
+    this.fixtureSpritesById.set(
+      "right-field-flag",
+      this.add.image(0, 0, SPRITE_ATLAS_KEY, SPRITES.flagRed).setOrigin(0.24, 1).setDepth(12),
+    );
+    this.fixtureSpritesById.set(
+      "low-center-barrier",
+      this.add.image(0, 0, SPRITE_ATLAS_KEY, SPRITES.barrierStriped).setOrigin(0.5, 1).setDepth(12),
+    );
+  }
+
+  private syncFixtureSprite(sprite: Phaser.GameObjects.Image, fixture: CourtFixture): void {
+    const frameWidth = Math.max(1, sprite.frame.width);
+    const frameHeight = Math.max(1, sprite.frame.height);
+    const bottomY = fixture.y + fixture.height;
+
+    if (fixture.id.includes("flag")) {
+      const scale = fixture.height / frameHeight;
+      sprite
+        .setPosition(fixture.x + (fixture.width / 2), bottomY)
+        .setScale(scale)
+        .setAlpha(fixture.collidable ? 1 : 0.45)
+        .setVisible(true);
+      return;
+    }
+
+    const scale = fixture.width / frameWidth;
+    sprite
+      .setPosition(fixture.x + (fixture.width / 2), bottomY)
+      .setScale(scale)
+      .setAlpha(fixture.collidable ? 1 : 0.45)
+      .setVisible(true);
+  }
+
+  private syncHeldAmmoSprite(
+    ammoType: AmmoType,
+    x: number,
+    y: number,
+    radius: number,
+    vx: number,
+    vy: number,
+    alpha: number,
+  ): boolean {
+    if (!this.heldAmmoSprite || !this.textures.exists(SPRITE_ATLAS_KEY)) return false;
+    this.syncAmmoSprite(this.heldAmmoSprite, ammoType, x, y, radius, vx, vy, alpha);
+    this.heldAmmoSprite.setDepth(26);
+    return true;
+  }
+
+  private syncProjectileSprite(projectile: ProjectileView, alpha: number): boolean {
+    if (!this.textures.exists(SPRITE_ATLAS_KEY)) return false;
+
+    let sprite = this.projectileSpritesById.get(projectile.id);
+    if (!sprite) {
+      sprite = this.add
+        .image(projectile.x, projectile.y, SPRITE_ATLAS_KEY, AMMO_SPRITE_FRAMES[projectile.ammoType])
+        .setOrigin(0.5)
+        .setDepth(24);
+      this.projectileSpritesById.set(projectile.id, sprite);
+    }
+
+    this.syncAmmoSprite(
+      sprite,
+      projectile.ammoType,
+      projectile.x,
+      projectile.y,
+      projectile.radius,
+      projectile.vx,
+      projectile.vy,
+      alpha,
+    );
+    return true;
+  }
+
+  private syncAmmoSprite(
+    sprite: Phaser.GameObjects.Image,
+    ammoType: AmmoType,
+    x: number,
+    y: number,
+    radius: number,
+    vx: number,
+    vy: number,
+    alpha: number,
+  ): void {
+    sprite.setTexture(SPRITE_ATLAS_KEY, AMMO_SPRITE_FRAMES[ammoType]);
+    const targetSize = this.resolveAmmoSpriteSize(ammoType, radius);
+    const largestFrameSide = Math.max(1, sprite.frame.width, sprite.frame.height);
+    const velocityAngle = Math.atan2(vy, vx);
+    const rotation = ammoType === "javelin" ? velocityAngle + (Math.PI / 4) : performance.now() * 0.0025;
+
+    sprite
+      .setPosition(x, y)
+      .setScale(targetSize / largestFrameSide)
+      .setRotation(rotation)
+      .setAlpha(alpha)
+      .setVisible(true);
+  }
+
+  private resolveAmmoSpriteSize(ammoType: AmmoType, radius: number): number {
+    if (ammoType === "javelin") return Math.max(52, radius * 13);
+    if (ammoType === "shotput") return Math.max(30, radius * 2.45);
+    return Math.max(32, radius * 4.1);
+  }
+
+  private destroyInactiveProjectileSprites(activeProjectileIds: Set<string>): void {
+    for (const [projectileId, sprite] of this.projectileSpritesById.entries()) {
+      if (activeProjectileIds.has(projectileId)) continue;
+      sprite.destroy();
+      this.projectileSpritesById.delete(projectileId);
+    }
+  }
 }
 
 const clamp01 = (value: number): number => Math.max(0, Math.min(1, value));
 const lerp = (a: number, b: number, t: number): number => a + ((b - a) * t);
 const easeOutCubic = (value: number): number => 1 - Math.pow(1 - clamp01(value), 3);
+const fract = (value: number): number => value - Math.floor(value);
+const pseudoRandom = (seed: number): number => fract(Math.sin(seed * 12.9898) * 43758.5453);
+const pointAlong = (origin: Vec2, direction: Vec2, distance: number): Vec2 => ({
+  x: origin.x + (direction.x * distance),
+  y: origin.y + (direction.y * distance),
+});

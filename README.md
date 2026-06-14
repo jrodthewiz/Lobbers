@@ -28,6 +28,7 @@ npm run build
 - Start `Practice Bot` from the first screen for a one-player bot match.
 - Two players only: Blue left and Red right.
 - Click-hold to charge, aim with the pointer, release to lob.
+- Select ammo with `1` Javelin, `2` Shotput, `3` Splitter, or cycle with `Q` and `E`.
 - Server-owned projectile physics, damage, round state, throw distance, and rematch state.
 - Ammo types: `javelin`, `shotput`, and `splitter`.
 
