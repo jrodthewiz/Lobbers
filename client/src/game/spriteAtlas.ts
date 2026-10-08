@@ -11,6 +11,11 @@ export const SPRITES = {
     javelin: "ammo/javelin",
     shotput: "ammo/shotput",
     splitter: "ammo/splitter",
+    discus: "ammo/discus-generated",
+    mortar: "ammo/mortar-generated",
+    needle: "ammo/needle-generated",
+    cluster: "ammo/cluster-generated",
+    anvil: "ammo/anvil-generated",
   },
   tank: {
     shadow: "tank/shadow",
@@ -59,7 +64,14 @@ export const SPRITES = {
     bracketLeftGenerated: "ui/bracket-left-generated",
     bracketRightGenerated: "ui/bracket-right-generated",
   },
+  pickups: {
+    armor: "pickup/armor-generated",
+    clusterAmmo: "pickup/cluster-ammo-generated",
+    dashCharge: "pickup/dash-generated",
+  },
   props: {
+    oilBarrel: "props/oil-barrel-generated",
+    supplyCrate: "props/supply-crate-generated",
     barrierStriped: "props/barrier-striped",
     flagBlue: "props/flag-blue",
     flagRed: "props/flag-red",
@@ -97,12 +109,22 @@ export const AMMO_SPRITE_FRAMES: Record<AmmoType, string> = {
   javelin: SPRITES.ammo.javelin,
   shotput: SPRITES.ammo.shotput,
   splitter: SPRITES.ammo.splitter,
+  discus: SPRITES.ammo.discus,
+  mortar: SPRITES.ammo.mortar,
+  needle: SPRITES.ammo.needle,
+  cluster: SPRITES.ammo.cluster,
+  anvil: SPRITES.ammo.anvil,
 };
 
 export const AMMO_UI_FRAMES: Record<AmmoType, string> = {
   javelin: SPRITES.ui.ammoJavelin,
   shotput: SPRITES.ui.ammoShotput,
   splitter: SPRITES.ui.ammoSplitter,
+  discus: SPRITES.ammo.discus,
+  mortar: SPRITES.ammo.mortar,
+  needle: SPRITES.ammo.needle,
+  cluster: SPRITES.ammo.cluster,
+  anvil: SPRITES.ammo.anvil,
 };
 
 export const AMMO_FX_FRAMES: Record<AmmoType, {
@@ -112,7 +134,7 @@ export const AMMO_FX_FRAMES: Record<AmmoType, {
 }> = {
   javelin: {
     trail: SPRITES.fx.trailGold,
-    impact: SPRITES.fx.starburstGoldGenerated,
+    impact: SPRITES.fx.impactJavelin,
     smoke: SPRITES.fx.smokeSmall,
   },
   shotput: {
@@ -125,4 +147,42 @@ export const AMMO_FX_FRAMES: Record<AmmoType, {
     impact: SPRITES.fx.confettiGenerated,
     smoke: SPRITES.fx.smokeMedium,
   },
+  discus: {
+    trail: SPRITES.fx.trailBlue,
+    impact: SPRITES.fx.starburstBlueGenerated,
+    smoke: SPRITES.fx.smokeSmall,
+  },
+  mortar: {
+    trail: SPRITES.fx.trailRed,
+    impact: SPRITES.fx.impactShotput,
+    smoke: SPRITES.fx.smokeLarge,
+  },
+  needle: {
+    trail: SPRITES.fx.trailGold,
+    impact: SPRITES.fx.impactJavelin,
+    smoke: SPRITES.fx.smokeSmall,
+  },
+  cluster: {
+    trail: SPRITES.fx.trailRed,
+    impact: SPRITES.fx.starburstGoldGenerated,
+    smoke: SPRITES.fx.smokeMedium,
+  },
+  anvil: {
+    trail: SPRITES.fx.trailRed,
+    impact: SPRITES.fx.starburstBlueGenerated,
+    smoke: SPRITES.fx.smokeLarge,
+  },
 };
+
+export const PICKUP_FRAMES = {
+  armor: SPRITES.pickups.armor,
+  clusterAmmo: SPRITES.pickups.clusterAmmo,
+  dashCharge: SPRITES.pickups.dashCharge,
+  repair: SPRITES.pickups.armor,
+  ammoCache: SPRITES.pickups.clusterAmmo,
+} as const;
+
+export const WORLD_PROP_FRAMES = {
+  oilBarrel: SPRITES.props.oilBarrel,
+  supplyCrate: SPRITES.props.supplyCrate,
+} as const;

@@ -1,3 +1,5 @@
+import { soundEnabled } from "./preferences";
+
 const AUDIO_SOURCES = {
   "ammo-javelin-select": [
     new URL("../assets/audio/ammo-javelin-select-1.ogg", import.meta.url).href,
@@ -246,8 +248,14 @@ export class GameAudio {
   private readonly clips = new Map<GameSoundKey, HTMLAudioElement[]>();
   private readonly lastVariantIndex = new Map<GameSoundKey, number>();
   private readonly lastPlayedAtMs = new Map<GameSoundKey, number>();
+  private readonly playing = new Set<HTMLAudioElement>();
 
   constructor() {
+    window.addEventListener("lobbers:sound", () => {
+      if (soundEnabled()) return;
+      for (const clip of this.playing) clip.pause();
+      this.playing.clear();
+    });
     for (const [key, urls] of Object.entries(AUDIO_SOURCES) as Array<[GameSoundKey, readonly string[]]>) {
       this.clips.set(
         key,
@@ -269,6 +277,7 @@ export class GameAudio {
   }
 
   play(key: GameSoundKey, volumeScale = 1, rateScale = 1): void {
+    if (!soundEnabled()) return;
     const now = performance.now();
     const minInterval = MIN_INTERVAL_MS[key] ?? 0;
     const lastPlayedAt = this.lastPlayedAtMs.get(key) ?? Number.NEGATIVE_INFINITY;
@@ -279,10 +288,13 @@ export class GameAudio {
     if (!source) return;
 
     const clip = source.cloneNode(true) as HTMLAudioElement;
+    this.playing.add(clip);
+    clip.addEventListener("ended", () => this.playing.delete(clip), { once: true });
     clip.volume = clampVolume(DEFAULT_VOLUME[key] * volumeScale);
     clip.playbackRate = clampRate(jitter(RATE_JITTER[key] ?? 0) * rateScale);
     clip.currentTime = 0;
     void clip.play().catch(() => {
+      this.playing.delete(clip);
       // Browsers may block playback until the first user gesture.
     });
   }

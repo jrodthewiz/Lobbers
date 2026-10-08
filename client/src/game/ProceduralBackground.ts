@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { WORLD } from "../../../shared/game/constants";
+import { readArenaTheme } from "./arenaTheme";
 
 const SKY_TEXTURE = "lobbers-bg-sky";
 const CLOUD_TEXTURE = "lobbers-bg-clouds";
@@ -103,6 +104,9 @@ export class ProceduralBackground {
 
   create(): void {
     this.paintTextures();
+    const repaint = () => this.paintTextures();
+    window.addEventListener("lobbers:arena", repaint);
+    this.scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => window.removeEventListener("lobbers:arena", repaint));
 
     this.scene.add.image(0, 0, SKY_TEXTURE).setOrigin(0).setDepth(-50);
     this.clouds = this.scene.add
@@ -127,7 +131,7 @@ export class ProceduralBackground {
     if (normalized === this.seedSource) return;
     this.seedSource = normalized;
     this.seed = hashText(normalized);
-    this.palette = PALETTES[this.seed % PALETTES.length] ?? PALETTES[0] ?? failPalette();
+    this.palette = PALETTES[0] ?? failPalette();
     this.wind = 0.72 + (this.seeded(7) * 0.86);
     this.paintTextures();
   }
@@ -155,25 +159,86 @@ export class ProceduralBackground {
 
   private paintSkyTexture(): void {
     this.paintCanvas(SKY_TEXTURE, WORLD.width, WORLD.height, (ctx, width, height) => {
+      const theme = readArenaTheme();
       const sky = ctx.createLinearGradient(0, 0, 0, WORLD.groundY);
-      sky.addColorStop(0, this.palette.skyTop);
-      sky.addColorStop(0.48, this.palette.skyMid);
-      sky.addColorStop(1, this.palette.skyHorizon);
+      sky.addColorStop(0, theme.sky[0]);
+      sky.addColorStop(0.5, theme.sky[1]);
+      sky.addColorStop(1, theme.sky[2]);
       ctx.fillStyle = sky;
       ctx.fillRect(0, 0, width, WORLD.groundY);
-
-      const glowX = width * (0.22 + (this.seeded(41) * 0.6));
-      const glowY = 110 + (this.seeded(43) * 120);
-      const glow = ctx.createRadialGradient(glowX, glowY, 18, glowX, glowY, 310 + (this.seeded(47) * 120));
-      glow.addColorStop(0, `rgba(${this.palette.glowRgb}, 0.22)`);
-      glow.addColorStop(1, `rgba(${this.palette.glowRgb}, 0)`);
-      ctx.fillStyle = glow;
-      ctx.fillRect(0, 0, width, WORLD.groundY);
-
-      this.drawRidge(ctx, width, WORLD.groundY - 126, 48 + (this.seeded(53) * 44), this.palette.ridgeFar, 61);
-      this.drawRidge(ctx, width, WORLD.groundY - 78, 34 + (this.seeded(67) * 32), this.palette.ridgeNear, 71);
-      this.drawStands(ctx, width);
-      this.drawLightTowers(ctx);
+      // Screen-printed sunshine, cloud puffs, garden hills, and a neighborhood fence.
+      const sunX = width * (0.3 + this.seeded(41) * 0.4);
+      const sunY = WORLD.groundY - 710;
+      ctx.fillStyle = theme.sun;
+      ctx.beginPath(); ctx.arc(sunX, sunY, 110, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = `${theme.sun}70`; ctx.lineWidth = 8;
+      for (let i = 0; i < 12; i++) {
+        const angle = i / 12 * Math.PI * 2;
+        ctx.beginPath(); ctx.moveTo(sunX + Math.cos(angle) * 136, sunY + Math.sin(angle) * 136);
+        ctx.lineTo(sunX + Math.cos(angle) * 160, sunY + Math.sin(angle) * 160); ctx.stroke();
+      }
+      for (let i = 0; i < 15; i++) {
+        const x = this.seeded(151 + i) * width;
+        const y = WORLD.groundY - 380 - this.seeded(131 + i) * 570;
+        const r = 28 + this.seeded(173 + i) * 30;
+        ctx.fillStyle = theme.cloud;
+        for (let j = 0; j < 4; j++) {
+          ctx.beginPath(); ctx.ellipse(x + j * r * .85, y - (j % 2) * r * .4, r, r * .65, 0, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.fillRect(x - r, y, r * 4.6, r * .5);
+      }
+      this.drawRidge(ctx, width, WORLD.groundY - 155, 140, theme.far, 61);
+      this.drawRidge(ctx, width, WORLD.groundY - 60, 105, theme.near, 71);
+      if (theme.id === "moon") {
+        ctx.fillStyle = theme.sky[0]; ctx.beginPath(); ctx.arc(sunX + 46, sunY - 35, 97, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "#fff1c7";
+        for (let i = 0; i < 110; i++) {
+          const x = this.seeded(18000 + i) * width, y = this.seeded(19000 + i) * (WORLD.groundY - 400);
+          const r = i % 9 === 0 ? 3 : 1.4;
+          ctx.globalAlpha = .35 + this.seeded(20000 + i) * .65;
+          ctx.fillRect(x - r, y, r * 2, 1.5); ctx.fillRect(x, y - r, 1.5, r * 2);
+        }
+        ctx.globalAlpha = 1;
+      }
+      ctx.save(); ctx.translate(width * .53, WORLD.groundY - 630); ctx.rotate(-.07);
+      ctx.fillStyle = "#263d38"; ctx.beginPath(); ctx.ellipse(4, 7, 145, 48, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = theme.cloud; ctx.beginPath(); ctx.ellipse(0, 0, 145, 48, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#d75c46"; ctx.fillRect(-82, -42, 16, 84); ctx.fillRect(68, -42, 16, 84);
+      ctx.fillStyle = "#263d38"; ctx.font = "bold 24px Trebuchet MS"; ctx.textAlign = "center"; ctx.fillText("LOB RESPONSIBLY", 0, 9);
+      ctx.fillRect(-28, 52, 56, 18); ctx.restore();
+      // Houses are distant scenery, deliberately quieter than the playable terrain.
+      for (let i = 0; i < 10; i++) {
+        const x = 140 + i * 405;
+        const y = WORLD.groundY - 165 - this.seeded(600 + i) * 45;
+        ctx.fillStyle = i % 2 === 0 ? "#d9cba3" : "#d8b598";
+        ctx.fillRect(x, y - 90, 108, 100);
+        ctx.fillStyle = "#7a8e77";
+        ctx.beginPath(); ctx.moveTo(x - 15, y - 90); ctx.lineTo(x + 54, y - 145); ctx.lineTo(x + 123, y - 90); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = "#f6e7b4"; ctx.fillRect(x + 16, y - 66, 24, 28); ctx.fillRect(x + 67, y - 66, 24, 28);
+        ctx.fillStyle = "#9cad8c"; ctx.fillRect(x + 44, y - 28, 26, 38);
+      }
+      ctx.strokeStyle = "#e7d6ab"; ctx.lineWidth = 7;
+      for (let x = 0; x < width; x += 56) {
+        const y = WORLD.groundY - 44;
+        ctx.fillStyle = "#e7d6ab"; ctx.beginPath();
+        ctx.moveTo(x, y); ctx.lineTo(x, y - 62); ctx.lineTo(x + 13, y - 76); ctx.lineTo(x + 26, y - 62); ctx.lineTo(x + 26, y); ctx.fill();
+      }
+      ctx.beginPath(); ctx.moveTo(0, WORLD.groundY - 63); ctx.lineTo(width, WORLD.groundY - 63); ctx.stroke();
+      // Two fluttering strings of club pennants above the arena.
+      for (const offset of [0, width - 720]) {
+        ctx.strokeStyle = "#486657"; ctx.lineWidth = 3; ctx.beginPath();
+        ctx.moveTo(offset, WORLD.groundY - 420); ctx.quadraticCurveTo(offset + 360, WORLD.groundY - 295, offset + 720, WORLD.groundY - 420); ctx.stroke();
+        for (let i = 1; i < 10; i++) {
+          const t = i / 10; const x = offset + 720 * t; const y = WORLD.groundY - 420 + 250 * t * (1 - t);
+          ctx.fillStyle = ["#d97b59", "#4c9691", "#edc65c"][i % 3] ?? "#edc65c";
+          ctx.beginPath(); ctx.moveTo(x - 15, y); ctx.lineTo(x + 15, y); ctx.lineTo(x + 3, y + 42); ctx.closePath(); ctx.fill();
+        }
+      }
+      // Tiny paper speckles give the large flat sky a tactile print finish.
+      ctx.fillStyle = "#263d38";
+      ctx.globalAlpha = .035;
+      for (let i = 0; i < 9000; i++) ctx.fillRect(this.seeded(1000 + i) * width, this.seeded(11000 + i) * WORLD.groundY, 1.5, 1.5);
+      ctx.globalAlpha = 1;
       this.drawGround(ctx, width, height);
     });
   }

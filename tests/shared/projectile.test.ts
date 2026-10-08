@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AMMO_DEFINITIONS } from "../../shared/game/ammo";
+import { AMMO_DEFINITIONS, AMMO_TYPES } from "../../shared/game/ammo";
 import {
   buildProjectilePhysicsProfile,
   findEarliestProjectileImpact,
@@ -11,6 +11,7 @@ import {
   circleIntersectsRect,
   integrateProjectile,
   normalizeAimForSide,
+  predictTrajectory,
   resolveBlastDamage,
   resolveChargeRatio,
   resolveShoulderPosition,
@@ -65,6 +66,24 @@ describe("shared projectile math", () => {
     expect(splitter.y).toBeGreaterThan(javelin.y);
   });
 
+  it("gives every weapon enough full-charge range for larger arenas", () => {
+    const aim = normalizeAimForSide({ aimX: 1, aimY: -0.72 }, "blue");
+    for (const ammoType of AMMO_TYPES) {
+      const ammo = AMMO_DEFINITIONS[ammoType];
+      const velocity = buildLaunchVelocity(ammo, CHARGE.maxMs, aim);
+      let current = { x: 0, y: WORLD.groundY - 200, vx: velocity.x, vy: velocity.y, radius: ammo.radius };
+      for (let i = 0; i < 240; i += 1) {
+        current = integrateBallisticProjectile(
+          current,
+          1 / 60,
+          buildProjectilePhysicsProfile(ammo.gravityScale, ammo.dragPerSecond),
+        );
+        if (current.y >= WORLD.groundY) break;
+      }
+      expect(current.x, `${ammoType} full-charge range`).toBeGreaterThan(1700);
+    }
+  });
+
   it("integrates downward gravity in screen coordinates", () => {
     const next = integrateProjectile({ x: 0, y: 100, vx: 100, vy: -100, radius: 5 }, 0.5, 1);
     expect(next.x).toBeGreaterThan(0);
@@ -95,6 +114,54 @@ describe("shared projectile math", () => {
     expect(impact?.colliderId).toBe("thin-flag");
     expect(impact?.x).toBeGreaterThan(50);
     expect(impact?.x).toBeLessThan(70);
+  });
+
+  it("stops trajectory previews on thin colliders before terrain", () => {
+    const points = predictTrajectory(
+      { x: 0, y: 100, vx: 2400, vy: 0, radius: 4 },
+      buildProjectilePhysicsProfile(0),
+      8,
+      1 / 30,
+      500,
+      undefined,
+      0,
+      400,
+      [{
+        id: "preview-flag",
+        rect: { x: 118, y: 70, width: 4, height: 80 },
+        directHitSessionId: null,
+      }],
+    );
+
+    const landing = points.at(-1);
+    expect(landing?.x).toBeGreaterThan(110);
+    expect(landing?.x).toBeLessThan(126);
+    expect(landing?.y).toBeCloseTo(100, 1);
+  });
+
+  it("sweeps projectile world-boundary exits at the crossing point", () => {
+    const sideImpact = findEarliestProjectileImpact({
+      start: { x: 20, y: 100, vx: -600, vy: 0, radius: 5 },
+      end: { x: -40, y: 100, vx: -600, vy: 0, radius: 5 },
+      colliders: [],
+      worldWidth: 500,
+      worldHeight: 400,
+    });
+    expect(sideImpact?.colliderId).toBe("out-of-bounds");
+    expect(sideImpact?.outOfBounds).toBe(true);
+    expect(sideImpact?.t).toBeGreaterThan(0);
+    expect(sideImpact?.t).toBeLessThan(1);
+    expect(sideImpact?.x).toBe(0);
+
+    const topImpact = findEarliestProjectileImpact({
+      start: { x: 100, y: 20, vx: 0, vy: -700, radius: 5 },
+      end: { x: 100, y: -60, vx: 0, vy: -700, radius: 5 },
+      colliders: [],
+      worldWidth: 500,
+      worldHeight: 400,
+    });
+    expect(topImpact?.colliderId).toBe("out-of-bounds");
+    expect(topImpact?.y).toBe(0);
   });
 
   it("measures throw distance in court meters", () => {

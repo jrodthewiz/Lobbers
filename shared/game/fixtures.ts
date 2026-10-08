@@ -1,11 +1,13 @@
 import { WORLD } from "./constants";
 import type { CourtFixture } from "./types";
 
+const CENTER_X = WORLD.width / 2;
+
 export const COURT_FIXTURES: readonly CourtFixture[] = [
   {
     id: "center-cage-left-post",
     kind: "cage",
-    x: 708,
+    x: CENTER_X - 92,
     y: WORLD.groundY - 210,
     width: 14,
     height: 210,
@@ -14,7 +16,7 @@ export const COURT_FIXTURES: readonly CourtFixture[] = [
   {
     id: "center-cage-right-post",
     kind: "cage",
-    x: 878,
+    x: CENTER_X + 78,
     y: WORLD.groundY - 210,
     width: 14,
     height: 210,
@@ -23,7 +25,7 @@ export const COURT_FIXTURES: readonly CourtFixture[] = [
   {
     id: "center-cage-crossbar",
     kind: "cage",
-    x: 708,
+    x: CENTER_X - 92,
     y: WORLD.groundY - 210,
     width: 184,
     height: 12,
@@ -32,7 +34,7 @@ export const COURT_FIXTURES: readonly CourtFixture[] = [
   {
     id: "left-field-flag",
     kind: "flag",
-    x: 520,
+    x: CENTER_X - 540,
     y: WORLD.groundY - 132,
     width: 9,
     height: 132,
@@ -41,7 +43,7 @@ export const COURT_FIXTURES: readonly CourtFixture[] = [
   {
     id: "right-field-flag",
     kind: "flag",
-    x: 1072,
+    x: CENTER_X + 532,
     y: WORLD.groundY - 132,
     width: 9,
     height: 132,
@@ -50,7 +52,7 @@ export const COURT_FIXTURES: readonly CourtFixture[] = [
   {
     id: "low-center-barrier",
     kind: "barrier",
-    x: 738,
+    x: CENTER_X - 62,
     y: WORLD.groundY - 32,
     width: 124,
     height: 32,
@@ -59,7 +61,7 @@ export const COURT_FIXTURES: readonly CourtFixture[] = [
   {
     id: "shotput-ring-marker",
     kind: "marker",
-    x: 774,
+    x: CENTER_X - 26,
     y: WORLD.groundY - 5,
     width: 52,
     height: 5,

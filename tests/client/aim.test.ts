@@ -4,6 +4,7 @@ import {
   resolveDirectPointerAim,
   resolvePointerAim,
   resolveSlingshotDragAim,
+  resolveSlingshotPullAnchor,
 } from "../../client/src/game/aim";
 
 describe("client pointer aiming", () => {
@@ -55,7 +56,57 @@ describe("client pointer aiming", () => {
     expect(aim.y).toBeCloseTo(currentAim.y / Math.hypot(currentAim.x, currentAim.y), 5);
   });
 
-  it("keeps charged aim aligned to the cursor instead of the drag delta", () => {
+  it("places the pull guide anchor opposite the launch aim", () => {
+    const aim = resolveSlingshotDragAim(
+      { x: 100, y: 470 },
+      { x: 170, y: 400 },
+      "blue",
+      { x: 1, y: -0.35 },
+    );
+    const anchor = resolveSlingshotPullAnchor(
+      { x: 200, y: 360 },
+      aim,
+      80,
+    );
+
+    expect(anchor.x).toBeLessThan(200);
+    expect(anchor.y).toBeGreaterThan(360);
+    expect((200 - anchor.x) / Math.hypot(200 - anchor.x, 360 - anchor.y)).toBeCloseTo(aim.x, 5);
+    expect((360 - anchor.y) / Math.hypot(200 - anchor.x, 360 - anchor.y)).toBeCloseTo(aim.y, 5);
+  });
+
+  it("clamps distant pull guide anchors", () => {
+    const anchor = resolveSlingshotPullAnchor(
+      { x: 200, y: 360 },
+      { x: 1, y: -1 },
+      800,
+      120,
+    );
+    const distance = Math.hypot(anchor.x - 200, anchor.y - 360);
+
+    expect(distance).toBeCloseTo(120, 5);
+  });
+
+  it("uses direct cursor aim before charging even when drag start is present", () => {
+    const aim = resolvePointerAim({
+      pointer: { x: 250, y: 350 },
+      shoulder: { x: 170, y: 400 },
+      side: "blue",
+      currentAim: { x: 1, y: -0.35 },
+      dragStart: { x: 170, y: 400 },
+      isCharging: false,
+    });
+    const directAim = resolveDirectPointerAim(
+      { x: 250, y: 350 },
+      { x: 170, y: 400 },
+      "blue",
+    );
+
+    expect(aim.x).toBeCloseTo(directAim.x, 5);
+    expect(aim.y).toBeCloseTo(directAim.y, 5);
+  });
+
+  it("uses slingshot drag aim while charging", () => {
     const hoverAim = resolvePointerAim({
       pointer: { x: 250, y: 350 },
       shoulder: { x: 170, y: 400 },
@@ -65,7 +116,7 @@ describe("client pointer aiming", () => {
       isCharging: false,
     });
     const chargeAim = resolvePointerAim({
-      pointer: { x: 250, y: 350 },
+      pointer: { x: 100, y: 470 },
       shoulder: { x: 170, y: 400 },
       side: "blue",
       currentAim: hoverAim,
@@ -75,7 +126,9 @@ describe("client pointer aiming", () => {
 
     expect(hoverAim.x).toBeGreaterThan(0);
     expect(hoverAim.y).toBeLessThan(0);
-    expect(chargeAim.x).toBeCloseTo(hoverAim.x, 5);
-    expect(chargeAim.y).toBeCloseTo(hoverAim.y, 5);
+    expect(chargeAim.x).toBeGreaterThan(0);
+    expect(chargeAim.y).toBeLessThan(0);
+    expect(chargeAim.x).not.toBeCloseTo(hoverAim.x, 3);
+    expect(chargeAim.y).not.toBeCloseTo(hoverAim.y, 3);
   });
 });

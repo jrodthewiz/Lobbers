@@ -11,6 +11,9 @@ export default defineConfig({
   use: {
     baseURL: clientUrl,
     trace: "on-first-retry",
+    ...(process.env.LOBBERS_BROWSER_PATH
+      ? { launchOptions: { executablePath: process.env.LOBBERS_BROWSER_PATH } }
+      : {}),
   },
   webServer: [
     {
