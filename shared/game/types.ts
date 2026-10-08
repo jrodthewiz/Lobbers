@@ -1,6 +1,13 @@
 export type Side = "blue" | "red";
 export type RoundState = "waiting" | "countdown" | "active" | "ended";
-export type AmmoType = "javelin" | "shotput" | "splitter";
+export type TurnPhase = "move" | "fire" | "resolving";
+export type AmmoType = "javelin" | "shotput" | "splitter" | "discus" | "mortar" | "needle" | "cluster" | "anvil";
+export type AbilityType = "dash";
+export type PickupType = "armor" | "clusterAmmo" | "dashCharge" | "repair" | "ammoCache";
+export type PickupKind = "armor" | "ammo" | "ability";
+export type WorldPropType = "oilBarrel" | "supplyCrate";
+export type BiomeId = "stadium" | "dunes" | "tundra" | "foundry" | "garden";
+export type TerrainMode = "classic" | "procedural";
 
 export type Vec2 = {
   x: number;
@@ -51,6 +58,10 @@ export type SetReadyPayload = {
 export type MoveInputPayload = {
   moveX: number;
   jump: boolean;
+};
+
+export type UseAbilityPayload = {
+  ability: AbilityType;
 };
 
 export type ProjectileKinematics = {

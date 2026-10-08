@@ -4,6 +4,7 @@ export const CLIENT_MESSAGES = {
   THROW_RELEASE: "throwRelease",
   SELECT_AMMO: "selectAmmo",
   MOVE_INPUT: "moveInput",
+  USE_ABILITY: "useAbility",
   SET_READY: "setReady",
   REMATCH: "rematch",
 } as const;

@@ -1,0 +1,238 @@
+/* Backyard Battle Club: paper, ink, and a little friendly destruction. */
+:root {
+  color-scheme: light;
+  --bg: #e8edce;
+  --panel: #fff8e7;
+  --panel-strong: #fff8e7;
+  --line: #263d38;
+  --text: #263d38;
+  --muted: #5f7063;
+  --blue: #237f87;
+  --red: #d75c46;
+  --gold: #f0c34b;
+  --button: #fff8e7;
+  --button-hover: #f0dfb7;
+  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+}
+button, input { font: inherit; }
+.hud button { border: 2px solid var(--line); border-radius: 7px; background: var(--panel); color: var(--text); box-shadow: 0 3px 0 var(--line); transition: transform .13s, background .13s, box-shadow .13s; }
+.hud button:hover:not(:disabled) { transform: translateY(-2px); background: #f5d36b; box-shadow: 0 5px 0 var(--line); }
+.hud button:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 var(--line); }
+.hud button:focus-visible, .hud input:focus-visible, summary:focus-visible { outline: 3px solid #237f87; outline-offset: 4px; }
+.hud input { border: 2px solid #263d38; border-radius: 5px; background: #fffbef; color: #263d38; box-shadow: none; padding: 12px 14px; width: 100%; }
+.hud[data-help-open="true"]::before { content: ""; position: fixed; inset: 0; z-index: 19; pointer-events: auto; }
+.lobby-panel {
+  inset: 0; width: 100%; height: 100%; max-height: none; transform: none;
+  padding: 24px 5vw 18px; border: 0; border-radius: 0; box-shadow: none;
+  background: radial-gradient(#263d3810 .7px, transparent .8px) 0 0 / 7px 7px, #f8f1dd;
+  display: grid; grid-template-columns: minmax(0,1.6fr) minmax(310px, .85fr);
+  grid-template-rows: auto minmax(0, 1fr) auto; grid-template-areas: "header header" "poster entry" "footer footer";
+  gap: 20px 5vw; overflow: auto;
+}
+.lobby-panel::before, .lobby-panel::after { display: none; }
+.club-header { grid-area: header; display: flex; align-items: center; gap: 16px; padding-bottom: 18px; border-bottom: 2px solid var(--line); font-size: 11px; font-weight: 900; letter-spacing: 1.5px; }
+.club-wordmark { border: 2px solid; padding: 7px 11px; font-size: 16px; border-radius: 50%; transform: rotate(-9deg); letter-spacing: -1px; }
+.club-edition { margin-left: auto; font-size: 10px; }
+.club-poster { grid-area: poster; position: relative; display: flex; flex-direction: column; justify-content: center; min-height: 0; }
+.club-eyebrow { font-size: 10px; font-weight: 900; letter-spacing: 2px; margin: 10px 0; }
+.club-poster h1 { font-family: Impact, "Arial Narrow", sans-serif; font-size: clamp(70px, 10.8vw, 168px); letter-spacing: -3px; line-height: .92; margin: 7px 0 0; font-weight: 900; transform: rotate(-3deg); transform-origin: left bottom; position: relative; z-index: 1; }
+.club-poster h1>span:first-child { color: #237f87; }
+.title-period { color: #d75c46; }
+.club-tagline { font-size: clamp(19px, 2.5vw, 34px); margin: 15px 0 0 5px; font-weight: 700; }
+.club-tagline em { font-family: Georgia, serif; font-weight: 400; }
+.club-illustration { width: 100%; max-height: 44vh; object-fit: contain; object-position: center; display: block; margin: -10px 0 -3px; }
+.club-caption { font-size: 12px; margin: 0; text-align: center; color: #5f7063; }
+.club-sticker { position: absolute; right: 1%; top: 17%; z-index: 2; width: 102px; height: 102px; background: #d75c46; color: #fff8e7; border: 2px solid #263d38; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 10px; font-weight: 900; line-height: 1.5; transform: rotate(13deg); box-shadow: 3px 3px 0 #263d38; }
+.club-sticker span { font-size: 18px; }
+.club-entry { grid-area: entry; align-self: center; padding: 24px 28px 20px; background: #fff9e9; border: 2px solid; box-shadow: 7px 7px 0 #263d38; position: relative; transform: rotate(1deg); }
+.entry-kicker { display: flex; justify-content: space-between; align-items: center; font-size: 9px; letter-spacing: 1.3px; font-weight: 900; border-bottom: 1px solid #263d3840; padding-bottom: 10px; }
+.entry-kicker>span:last-child { font-size: 24px; }
+.club-entry h2, .club-help h2, .match-panel h2 { font-family: Impact, "Arial Narrow", sans-serif; font-size: 52px; letter-spacing: -.5px; line-height: .98; font-weight: 400; margin: 18px 0 12px; }
+.club-entry>p { margin: 0 0 20px; font-size: 12px; line-height: 1.6; color: #5f7063; }
+.club-entry>label { display: block; margin-bottom: 7px; font-size: 9px; letter-spacing: 1.3px; font-weight: 900; }
+.club-entry .club-primary { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-top: 14px; padding: 15px 18px; background: #d75c46; color: #fff9e9; font-size: 20px; font-weight: 900; letter-spacing: 1px; }
+.club-entry .club-primary:hover:not(:disabled) { background: #bf4734; }
+.entry-note { display: block; margin-top: 10px; font-size: 10px; text-align: center; color: #5f7063; }
+.club-divider { display: flex; align-items: center; gap: 10px; margin: 20px 0 12px; font-size: 8px; letter-spacing: .8px; font-weight: 900; }
+.club-divider::before, .club-divider::after { content: ""; flex: 1; height: 1px; background: #263d3830; }
+.club-friend-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.club-friend-actions button { padding: 10px 5px; font-size: 11px; font-weight: 700; }
+.club-join { display: flex; gap: 8px; margin-top: 14px; }
+.club-join input { min-width: 0; font-size: 10px; letter-spacing: 1px; }
+.club-join button { white-space: nowrap; padding: 8px 12px; font-size: 11px; }
+.club-lobbies { margin-top: 15px; font-size: 11px; pointer-events: auto; }
+.club-lobbies summary { cursor: pointer; font-weight: 700; padding: 3px 0; }
+.club-lobbies .lobby-list-rows { max-height: 130px; overflow: auto; }
+.club-lobbies .empty-list { color: #5f7063; font-size: 11px; }
+.club-lobbies .ui-sprite { display: none; }
+.club-status { display: flex; gap: 7px; align-items: center; margin-top: 12px; font-size: 10px; color: #5f7063; }
+.status-dot { height: 6px; width: 6px; background: #237f87; border-radius: 50%; flex-shrink: 0; }
+.club-footer { grid-area: footer; border-top: 2px solid; padding-top: 15px; display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 9px; letter-spacing: .6px; font-weight: 900; }
+.club-footer button { border: 0; box-shadow: none; padding: 7px; background: transparent; font-size: 10px; }
+.active-hud { padding: 14px 18px; }
+.top-strip .player-card, .top-strip .room-chip { grid-row: auto; grid-column: auto; }
+.room-chip[data-round-state] { background: #263d38; border-color: #263d38; box-shadow: none; }
+.room-chip .room-state-line span { color: #fff8e7; }
+.blue-side .player-card-content strong { color: #237f87; }
+.red-side .player-card-content strong { color: #c94d39; }
+.active-side-props, .ammo-prop, .player-card-badge, .room-scoreboard, .room-state-line>.ui-sprite, .popup-corner, .charge-icon { display: none !important; }
+.top-strip { max-width: 840px; margin: 0 auto; grid-template-columns: 1fr 170px 1fr; gap: 18px; }
+.player-card, .room-chip, .ammo-strip, .ability-cluster, .shield-chip, .pickup-toast, .round-event-toast, .match-panel { background: #fff8e7; color: #263d38; border: 2px solid #263d38; box-shadow: 3px 4px 0 #263d38; backdrop-filter: none; border-radius: 8px; }
+.player-card { padding: 10px 14px; min-height: 82px; grid-template-columns: 55px minmax(0, 1fr); }
+.red-side { grid-template-columns: minmax(0, 1fr) 55px; }
+.blue-side { border-top: 5px solid #237f87; }
+.red-side { border-top: 5px solid #d75c46; }
+.player-name-line { color: #263d38; font-size: 12px; font-weight: 900; }
+.tank-portrait { width: 54px !important; height: 54px !important; filter: none; }
+.player-card strong { font-size: 16px; }
+.meter { background: #263d3820; border: 0; border-radius: 2px; height: 7px; box-shadow: none; }
+.blue-side .meter span { background: #237f87; }
+.red-side .meter span { background: #d75c46; }
+.room-chip { min-height: 82px; padding: 10px; background: #263d38; color: #fff8e7; box-shadow: none; }
+.room-chip>strong { font-size: 19px; letter-spacing: 3px; color: #f0c34b; }
+.room-chip small { color: #d3dbbc; font-size: 9px; }
+.room-state-line { font-size: 10px; letter-spacing: 1px; }
+.club-match-tools { position: absolute; right: 18px; top: 112px; display: flex; gap: 8px; }
+.club-match-tools button { font-size: 10px; padding: 7px 10px; }
+.turn-ticket { position: absolute; top: 112px; left: 50%; transform: translateX(-50%); width: min(475px, calc(100vw - 36px)); padding: 10px 14px 13px; display: flex; align-items: center; gap: 12px; background: #fff8e7; color: #263d38; border: 2px solid; border-radius: 7px; overflow: hidden; box-shadow: 3px 3px 0 #263d38; }
+.turn-clock { font-family: Impact, sans-serif; font-size: 32px; line-height: 1; padding-right: 12px; border-right: 1px solid #263d3830; min-width: 43px; }
+.turn-ticket strong { display: block; font-size: 14px; }
+.turn-ticket div>span { font-size: 10px; color: #5f7063; display: block; margin-top: 3px; }
+#turnCount { margin-left: auto; font-size: 9px; font-weight: 900; white-space: nowrap; }
+.turn-track { position: absolute; bottom: 0; left: 0; width: 100%; height: 4px; background: #263d3820; }
+.turn-track>span { height: 100%; background: #237f87; display: block; margin: 0 !important; }
+.hud[data-local-turn="false"] .turn-ticket { background: #e7ead7; }
+.turn-ticket[data-urgent="true"] { border-color: #d75c46; }
+.turn-ticket[data-urgent="true"] .turn-clock { color: #c44733; }
+.turn-ticket[data-urgent="true"] .turn-track>span { background: #d75c46; }
+.bottom-hud { left: 24px; right: 24px; bottom: 20px; display: grid; grid-template-columns: minmax(0,1fr) auto; grid-template-areas: "charge abilities" "ammo camera" "distance distance"; gap: 10px 16px; align-items: end; max-width: 1160px; margin: auto; }
+.ammo-loadout { grid-area: ammo; width: 100%; display: block; }
+.ammo-strip { width: 100%; max-width: none; padding: 8px; display: grid; grid-template-columns: repeat(8,minmax(0,1fr)); gap: 6px; overflow: visible; }
+.hud .ammo-button { height: 68px; min-width: 0; padding: 4px; background: transparent; border: 1px solid #263d3840; box-shadow: none; border-radius: 4px; display: flex; flex-direction: column; justify-content: center; gap: 1px; position: relative; }
+.ammo-icon { width: 32px !important; height: 27px !important; filter: none; }
+.ammo-name { font-size: 9px; font-weight: 700; }
+.ammo-key { position: absolute; left: 4px; top: 3px; font-size: 8px; color: #5f7063; display: block; }
+.ammo-badge { position: absolute; right: 4px; top: 3px; font-size: 8px; color: #5f7063; background: transparent; padding: 0; border: 0; }
+.hud .ammo-button.selected { background: #f3cf63; border: 2px solid #263d38; color: #263d38; box-shadow: 0 2px 0 #263d38; }
+.hud .ammo-button:disabled { opacity: .72; }
+.distance-strip { grid-area: distance; justify-self: stretch; max-width: none; background: transparent; border: 0; padding: 0; box-shadow: none; color: #263d38; font-size: 10px; display: flex; gap: 14px; justify-content: space-between; }
+.distance-strip>span { display: none; }
+.distance-strip>.weapon-hint, .distance-strip>.wind-telemetry { display: inline-flex; background: #fff8e7; box-shadow: 0 0 0 2px #fff8e7; }
+.distance-strip strong { color: #263d38; }
+.distance-strip .metric-icon { display: none !important; }
+.distance-strip .wind-telemetry strong { color: #263d38; }
+.charge-meter { grid-area: charge; width: 100%; height: 15px; border: 2px solid #263d38; background: #fff8e7; box-shadow: none; border-radius: 4px; overflow: visible; position: relative; }
+#chargeFill { background: #237f87; border-radius: 1px; }
+.charge-meter::after { content: "HOLD TO CHARGE → RELEASE TO LOB"; position: absolute; top: -15px; left: 0; font-size: 8px; letter-spacing: 1px; font-weight: 900; color: #263d38; background: #fff8e7; }
+.charge-meter[data-charge-state]::after { inset: auto auto auto 0; top: -15px; height: 12px; opacity: 1; box-shadow: none; }
+.charge-meter[data-charge-state] #chargeFill { background: #237f87; box-shadow: none; }
+.charge-meter[data-charge-state="primed"] #chargeFill { background: #dda925; }
+.charge-meter[data-charge-state="full"] #chargeFill { background: #d75c46; }
+.hud[data-charge-state="full"] .charge-meter::after { content: "FULL POWER. LET IT FLY!"; color: #bd4633; }
+.hud[data-charge-state="full"] #chargeFill { background: #d75c46; }
+.ability-cluster { grid-area: abilities; padding: 0; display: flex; gap: 8px; border: 0; box-shadow: none; background: transparent; }
+.dash-button, .shield-chip { min-width: 0; height: 39px; padding: 6px 10px; font-size: 10px; }
+.hud .dash-button { background: #f0c34b; }
+.dash-glyph span { font-size: 8px; color: #263d38; }
+.shield-chip { color: #263d38; }
+.shield-chip strong, .dash-button small { color: #263d38; }
+.shield-meter { background: #263d3820; }
+.camera-controls { grid-area: camera; gap: 6px; justify-self: end; background: transparent; box-shadow: none; border: 0; padding: 0; }
+.camera-controls strong { color: #263d38; }
+.hud .camera-button { padding: 7px; height: 34px; min-width: 31px; font-size: 10px; background: #fff8e7; }
+.camera-controls .ui-sprite { display: none !important; }
+.pickup-toast { position: absolute; bottom: 170px; left: 50%; transform: translateX(-50%); white-space: nowrap; padding: 10px 16px; max-width: calc(100vw - 30px); }
+.pickup-toast[data-pickup-kind] { background: #fff8e7; color: #263d38; border-color: #263d38; }
+.pickup-toast[data-pickup-kind] .pickup-toast-glyph { color: #237f87; background: #e7ead7; box-shadow: none; }
+.pickup-toast.is-visible { transform: translateX(-50%); }
+.round-event-toast { position: absolute; bottom: 205px; left: 50%; transform: translateX(-50%); background: #f0c34b; color: #263d38; border: 2px solid; border-radius: 6px; padding: 12px 20px; font-size: 16px; font-weight: 900; letter-spacing: .5px; }
+.match-panel { width: min(500px, calc(100vw - 36px)); padding: 30px; text-align: center; }
+.match-panel .panel-icon { display: none !important; }
+.panel-eyebrow { font-size: 9px; letter-spacing: 1.2px; font-weight: 900; }
+.match-panel h2 { font-size: 42px; }
+.match-panel .ready-tip { font-size: 12px; line-height: 1.7; }
+.match-panel .panel-command { background: #d75c46; color: #fff8e7; font-size: 16px; margin-top: 12px; padding: 12px 28px; }
+.match-panel .button-icon { display: none !important; }
+.match-recap { display: grid; grid-template-columns: repeat(3, 1fr); margin: 22px 0; border-top: 1px solid #263d3830; border-bottom: 1px solid #263d3830; padding: 16px 0; gap: 8px; }
+.match-recap strong { font-size: 23px; display: block; }
+.match-recap span { font-size: 8px; letter-spacing: .5px; }
+.club-help { pointer-events: auto; position: absolute; z-index: 20; top: 50%; left: 50%; transform: translate(-50%,-50%); width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; background: #fff8e7; color: #263d38; border: 2px solid; box-shadow: 0 0 0 100vmax #263d38b8, 7px 7px 0 #263d38; padding: 30px; border-radius: 6px; }
+.hud .help-close { position: absolute; top: 15px; right: 15px; font-size: 22px; width: 35px; height: 35px; padding: 0; }
+.club-help h2 { font-size: 50px; }
+.help-step { display: flex; gap: 16px; margin: 20px 0; }
+.help-step>b { font-family: Impact, sans-serif; color: #237f87; font-size: 26px; }
+.help-step strong { font-size: 14px; }
+.help-step p, .help-camera { font-size: 12px; line-height: 1.6; color: #5f7063; margin: 5px 0; }
+.help-camera { border-top: 1px solid #263d3830; padding-top: 16px; }
+@media (min-width: 1000px) and (max-height: 780px) {
+  .lobby-panel { padding-top: 16px; gap: 12px 4vw; }
+  .club-entry { padding: 16px 24px; }
+  .club-entry h2 { font-size: 42px; margin: 10px 0; }
+  .club-entry>p { margin-bottom: 12px; }
+  .club-divider { margin: 14px 0 10px; }
+  .club-illustration { max-height: 39vh; }
+}
+@media (max-width: 999px) {
+  .lobby-panel { padding: 18px 4vw; gap: 18px 24px; grid-template-columns: minmax(0,1fr) 320px; }
+  .club-poster h1 { font-size: 10vw; letter-spacing: -1px; }
+  .club-eyebrow { font-size: 8px; letter-spacing: .8px; }
+  .club-sticker { width: 76px; height: 76px; font-size: 8px; top: 29%; }
+  .club-entry { padding: 20px; }
+  .club-edition { display: none; }
+  .club-footer>span { font-size: 8px; }
+  .club-match-tools { top: 185px; }
+  .bottom-hud { left: 14px; right: 14px; grid-template-columns: minmax(0,1fr) auto; grid-template-areas: "charge abilities" "ammo ammo" "distance camera"; gap: 10px; }
+  .distance-strip { display: flex; align-self: center; }
+  .distance-strip>.wind-telemetry { display: none; }
+  .ammo-strip { grid-template-columns: repeat(8,minmax(0,1fr)); }
+  .hud .ammo-button { height: 57px; }
+  .top-strip { gap: 10px; grid-template-columns: minmax(0,1fr) 140px minmax(0,1fr); }
+}
+@media (max-width: 680px) {
+  .lobby-panel { inset: 0; padding: 16px 22px 26px; display: flex; flex-direction: column; height: 100%; }
+  .club-header, .club-poster, .club-entry, .club-footer { flex-shrink: 0; }
+  .club-header { font-size: 9px; gap: 12px; padding-bottom: 12px; }
+  .club-poster { padding-top: 12px; }
+  .club-poster h1 { font-size: 20vw; }
+  .club-tagline { font-size: 23px; }
+  .club-illustration { max-height: 240px; margin: -5px 0; }
+  .club-sticker { top: 24%; right: 1%; }
+  .club-caption { font-size: 10px; }
+  .club-entry { margin: 10px 4px; transform: none; padding: 22px; align-self: stretch; }
+  .club-entry h2 br { display: none; }
+  .club-entry h2 { max-width: 210px; }
+  .club-entry h2 { font-size: 40px; }
+  .club-footer { flex-wrap: wrap; gap: 12px; font-size: 8px; }
+  .club-footer>span { width: 45%; }
+  .active-hud { padding: 10px; }
+  .top-strip { grid-template-columns: minmax(0,1fr) 102px minmax(0,1fr); gap: 6px; }
+  .player-card, .red-side { grid-template-columns: 1fr; padding: 8px; min-height: 74px; }
+  .player-name-line { font-size: 10px; }
+  .player-card strong { font-size: 13px; }
+  .room-chip { min-height: 74px; padding: 7px; }
+  .room-chip>strong { font-size: 14px; letter-spacing: 1px; }
+  .room-state-line { font-size: 8px; }
+  .turn-ticket { top: 96px; padding: 10px; gap: 8px; }
+  .turn-ticket strong { font-size: 12px; }
+  .turn-ticket div>span { font-size: 8px; }
+  #turnCount { display: none; }
+  .club-match-tools { top: 170px; right: 12px; }
+  .bottom-hud { bottom: 12px; grid-template-columns: 1fr auto; grid-template-areas: "charge abilities" "ammo ammo" "distance camera"; }
+  .ammo-strip { gap: 3px; padding: 5px; }
+  .hud .ammo-button { height: 55px; }
+  .ammo-name { font-size: 7px; }
+  .ammo-icon { width: 25px !important; height: 23px !important; }
+  .ammo-key { display: none; }
+  .ability-cluster { display: flex; }
+  .dash-button { padding: 6px !important; }
+  .shield-chip { display: none; }
+  .distance-strip { font-size: 8px; }
+  .camera-controls { gap: 4px; }
+  .hud .camera-button { min-width: 25px; padding: 5px; font-size: 9px; }
+  .charge-meter::after { font-size: 6px; letter-spacing: .2px; }
+  .round-event-toast { bottom: 190px; font-size: 12px; white-space: nowrap; }
+  .club-help { padding: 24px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hud *, .hud *::before, .hud *::after { transition: none !important; animation: none !important; }
+}

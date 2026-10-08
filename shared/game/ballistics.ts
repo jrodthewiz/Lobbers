@@ -1,4 +1,5 @@
 import { WORLD } from "./constants";
+import { findTerrainImpact, generateTerrainLane, type TerrainLane } from "./terrain";
 import type { ProjectileKinematics, Rect, Vec2 } from "./types";
 
 export type ProjectilePhysicsProfile = {
@@ -29,6 +30,7 @@ export type ProjectileSweepInput = {
   worldWidth?: number;
   worldHeight?: number;
   groundY?: number;
+  terrain?: TerrainLane;
 };
 
 const clamp01 = (value: number): number => Math.max(0, Math.min(1, value));
@@ -107,6 +109,50 @@ const sweepCircleVsExpandedRect = (
   return clamp01(tMin);
 };
 
+const resolveBoundaryImpact = (
+  start: ProjectileKinematics,
+  end: ProjectileKinematics,
+  worldWidth: number,
+  worldHeight: number,
+): ProjectileImpact | null => {
+  const candidates: Array<{ t: number; x: number; y: number }> = [];
+  const addVertical = (boundaryX: number): void => {
+    const dx = end.x - start.x;
+    if (Math.abs(dx) < 0.000001) return;
+    const t = (boundaryX - end.radius - start.x) / dx;
+    if (boundaryX <= 0) {
+      const leftT = (-end.radius - start.x) / dx;
+      if (leftT >= 0 && leftT <= 1) candidates.push({ t: leftT, x: 0, y: lerp(start.y, end.y, leftT) });
+      return;
+    }
+    if (t >= 0 && t <= 1) candidates.push({ t, x: worldWidth, y: lerp(start.y, end.y, t) });
+  };
+  const addHorizontal = (boundaryY: number, yValue: number): void => {
+    const dy = end.y - start.y;
+    if (Math.abs(dy) < 0.000001) return;
+    const t = (boundaryY - start.y) / dy;
+    if (t >= 0 && t <= 1) candidates.push({ t, x: lerp(start.x, end.x, t), y: yValue });
+  };
+
+  addVertical(0);
+  addVertical(worldWidth + end.radius);
+  addHorizontal(-end.radius, 0);
+  addHorizontal(worldHeight + end.radius, worldHeight);
+
+  const best = candidates
+    .filter((candidate) => candidate.x >= -0.5 && candidate.x <= worldWidth + 0.5)
+    .sort((a, b) => a.t - b.t)[0];
+  if (!best) return null;
+  return {
+    x: Math.max(0, Math.min(worldWidth, best.x)),
+    y: Math.max(0, Math.min(worldHeight, best.y)),
+    t: clamp01(best.t),
+    colliderId: "out-of-bounds",
+    directHitSessionId: null,
+    outOfBounds: true,
+  };
+};
+
 export const findEarliestProjectileImpact = ({
   start,
   end,
@@ -114,6 +160,7 @@ export const findEarliestProjectileImpact = ({
   worldWidth = WORLD.width,
   worldHeight = WORLD.height,
   groundY = WORLD.groundY,
+  terrain,
 }: ProjectileSweepInput): ProjectileImpact | null => {
   let best: ProjectileImpact | null = null;
   const consider = (impact: ProjectileImpact): void => {
@@ -122,28 +169,25 @@ export const findEarliestProjectileImpact = ({
     }
   };
 
-  if (start.y + start.radius < groundY && end.y + end.radius >= groundY) {
-    const t = clamp01((groundY - start.radius - start.y) / Math.max(0.000001, end.y - start.y));
+  const terrainImpact = findTerrainImpact(
+    terrain ?? generateTerrainLane("classic-flat", worldWidth, groundY, worldWidth),
+    start,
+    end,
+  );
+  if (terrainImpact) {
+    const t = clamp01(terrainImpact.t);
     consider({
-      x: lerp(start.x, end.x, t),
-      y: groundY - start.radius,
+      x: terrainImpact.x,
+      y: terrainImpact.y,
       t,
-      colliderId: "ground",
+      colliderId: terrain ? "terrain" : "ground",
       directHitSessionId: null,
       outOfBounds: false,
     });
   }
 
-  if (end.x < -end.radius || end.x > worldWidth + end.radius || end.y > worldHeight + end.radius) {
-    consider({
-      x: Math.max(0, Math.min(worldWidth, end.x)),
-      y: Math.max(0, Math.min(worldHeight, end.y)),
-      t: 1,
-      colliderId: "out-of-bounds",
-      directHitSessionId: null,
-      outOfBounds: true,
-    });
-  }
+  const boundaryImpact = resolveBoundaryImpact(start, end, worldWidth, worldHeight);
+  if (boundaryImpact) consider(boundaryImpact);
 
   for (const collider of colliders) {
     const t = sweepCircleVsExpandedRect(start, end, start.radius, collider.rect);

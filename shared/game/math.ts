@@ -1,10 +1,13 @@
 import { AMMO_DEFINITIONS, type AmmoDefinition } from "./ammo";
 import {
   buildProjectilePhysicsProfile,
+  findEarliestProjectileImpact,
   integrateBallisticProjectile,
+  type ProjectileCollider,
   type ProjectilePhysicsProfile,
 } from "./ballistics";
 import { CHARGE, SIDE_SIGN, WORLD } from "./constants";
+import { findTerrainImpact, getTerrainY, type TerrainLane } from "./terrain";
 import type { ProjectileKinematics, Rect, Side, ThrowReleasePayload, Vec2 } from "./types";
 
 export const clamp = (value: number, min: number, max: number): number => {
@@ -79,6 +82,11 @@ export const predictTrajectory = (
   physics: number | ProjectilePhysicsProfile,
   steps = 56,
   dtSeconds = 1 / 30,
+  worldWidth: number = WORLD.width,
+  terrain?: TerrainLane,
+  terrainOffsetX = 0,
+  worldHeight: number = WORLD.height,
+  colliders: readonly ProjectileCollider[] = [],
 ): Vec2[] => {
   const profile = typeof physics === "number"
     ? buildProjectilePhysicsProfile(physics)
@@ -86,10 +94,37 @@ export const predictTrajectory = (
   const points: Vec2[] = [];
   let current = { ...projectile };
   for (let i = 0; i < steps; i += 1) {
+    const previous = current;
     current = integrateBallisticProjectile(current, dtSeconds, profile);
-    if (current.x < 0 || current.x > WORLD.width || current.y > WORLD.height) break;
+    const terrainImpact = terrain
+      ? findTerrainImpact(
+        terrain,
+        { ...previous, x: previous.x - terrainOffsetX },
+        { ...current, x: current.x - terrainOffsetX },
+      )
+      : null;
+    const colliderImpact = colliders.length > 0
+      ? findEarliestProjectileImpact({
+        start: previous,
+        end: current,
+        colliders,
+        worldWidth,
+        worldHeight,
+        groundY: worldHeight + WORLD.height,
+      })
+      : null;
+    if (colliderImpact && (!terrainImpact || colliderImpact.t <= terrainImpact.t)) {
+      points.push({ x: colliderImpact.x, y: colliderImpact.y });
+      break;
+    }
+    if (terrainImpact) {
+      points.push({ x: terrainImpact.x + terrainOffsetX, y: terrainImpact.y });
+      break;
+    }
+    if (current.x < 0 || current.x > worldWidth || current.y > worldHeight) break;
     points.push({ x: current.x, y: current.y });
-    if (current.y + current.radius >= WORLD.groundY) break;
+    const terrainX = current.x - terrainOffsetX;
+    if (current.y + current.radius >= (terrain ? getTerrainY(terrain, terrainX) : WORLD.groundY)) break;
   }
   return points;
 };

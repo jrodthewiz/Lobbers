@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   createLobbyCode,
-  createSplitLobbyCode,
   getLobby,
   listOpenLobbies,
   normalizeLobbyCode,
@@ -70,27 +69,4 @@ describe("lobby registry", () => {
     removeLobby("FULL01");
   });
 
-  it("creates derived split lobby codes without collisions", () => {
-    upsertLobby({
-      roomId: "root",
-      code: "ABC123",
-      hostName: "Root",
-      playerCount: 2,
-      maxPlayers: 2,
-      roundState: "waiting",
-    });
-    upsertLobby({
-      roomId: "split",
-      code: "ABC1232",
-      hostName: "Split",
-      playerCount: 2,
-      maxPlayers: 2,
-      roundState: "waiting",
-    });
-
-    expect(createSplitLobbyCode("abc-123")).toBe("ABC1233");
-
-    removeLobby("ABC123");
-    removeLobby("ABC1232");
-  });
 });

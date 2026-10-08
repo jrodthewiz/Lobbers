@@ -36,13 +36,33 @@ export const resolveSlingshotDragAim = (
   return normalizeAimForSide({ aimX, aimY }, side);
 };
 
+export const resolveSlingshotPullAnchor = (
+  hand: Vec2,
+  aim: Vec2,
+  pullDistance: number,
+  maxDistance = 120,
+): Vec2 => {
+  const distance = Math.min(maxDistance, Math.max(0, pullDistance));
+  const aimLength = Math.hypot(aim.x, aim.y);
+  if (distance <= 0.001 || aimLength <= 0.001) return hand;
+  const pullX = -aim.x / aimLength;
+  const pullY = -aim.y / aimLength;
+  return {
+    x: hand.x + (pullX * distance),
+    y: hand.y + (pullY * distance),
+  };
+};
+
 export const resolvePointerAim = ({
   pointer,
   shoulder,
   side,
-  currentAim: _currentAim,
-  dragStart: _dragStart,
-  isCharging: _isCharging,
+  currentAim,
+  dragStart,
+  isCharging,
 }: PointerAimInput): Vec2 => {
+  if (isCharging && dragStart) {
+    return resolveSlingshotDragAim(pointer, dragStart, side, currentAim);
+  }
   return resolveDirectPointerAim(pointer, shoulder, side);
 };
