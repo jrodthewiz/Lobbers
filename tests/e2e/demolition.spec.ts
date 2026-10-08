@@ -24,7 +24,18 @@ test("demolition starts stable, responds to driving, water, and retry", async ({
     await page.getByRole("button", { name: "Retry challenge" }).click();
     expect((await read()).water).toBe(0);
     expect((await read()).targets).toBe(0);
-    await page.getByLabel("Demolition challenge").selectOption("1");
+    await expect(page.locator('#demoCourse option[value="1"]')).toBeDisabled();
+    await page.keyboard.down("d");
+    for(let i=0;i<12;i++){
+        await page.keyboard.down("j");await page.waitForTimeout(650);await page.keyboard.up("j");
+        if((await read()).completed)break;
+        if(i%2===0)await page.keyboard.press("Space");await page.waitForTimeout(150);
+    }
+    await page.keyboard.up("d");
+    await expect(page.locator("#demoResultTitle")).toHaveText("Beautiful disaster.");
+    await page.locator("#demoNext").click();
+    await expect(page.locator("#demoMission")).toHaveText("Water under the bridge");
+    await page.reload({waitUntil:"domcontentloaded"});
     await expect(page.locator("#demoMission")).toHaveText("Water under the bridge");
     await page.getByRole("button", { name: "✎ Draw your machine" }).click();
     await expect(page.getByRole("dialog", { name: "Contraption garage" })).toBeVisible();

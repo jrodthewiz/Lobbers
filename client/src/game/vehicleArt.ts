@@ -3,11 +3,13 @@ import { morphStrokes } from "../../../shared/game/vectorMorph";
 export type VectorPrimitive = { points?: VectorPoint[]; center?: VectorPoint; radius?: number; color: string; fill: boolean; width: number; alpha?: number };
 export type VehicleMotion = { angle: number; travel: number; thrust: number; charge: number; shield: boolean; time: number };
 let saved: VehicleDesign | null = null;
-try { saved = parseVehicleDesign(localStorage.getItem("lobbers-vehicle")); } catch { /* Optional persistence. */ }
+const lane=new URLSearchParams(location.search).get("lane");
+const storageKey=lane==="1"||lane==="2"?`lobbers-vehicle-p${lane}`:"lobbers-vehicle";
+try { saved = parseVehicleDesign(localStorage.getItem(storageKey)); } catch { /* Optional persistence. */ }
 export const currentVehicle = (): VehicleDesign | null => saved;
 export function saveVehicle(design: VehicleDesign | null): void {
   saved = design;
-  try { if (design) localStorage.setItem("lobbers-vehicle", JSON.stringify(design)); else localStorage.removeItem("lobbers-vehicle"); } catch { /* Keep in memory. */ }
+  try { if (design) localStorage.setItem(storageKey, JSON.stringify(design)); else localStorage.removeItem(storageKey); } catch { /* Keep in memory. */ }
   window.dispatchEvent(new Event("lobbers:vehicle"));
 }
 export function vehiclePrimitives(design: VehicleDesign, motion: VehicleMotion): VectorPrimitive[] {

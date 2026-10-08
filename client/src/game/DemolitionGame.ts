@@ -4,6 +4,8 @@ import { GameAudio } from "../audio/GameAudio";
 import { soundEnabled, toggleSound } from "../audio/preferences";
 import { currentVehicle, drawVehicleCanvas, drawEffectCanvas, garageDefault } from "./vehicleArt";
 import type { VehicleDesign } from "../../../shared/game/vehicleDesign";
+import { demolitionChallenge, completeDemolition, parseDemolitionProgress } from "../../../shared/game/demolitionChallenges";
+import { demolitionBlueprint } from "../../../shared/game/demolitionBlueprint";
 type Point = {
     x: number;
     y: number;
@@ -34,6 +36,7 @@ type MatterAPI = {
     Bodies: {
         rectangle(x: number, y: number, w: number, h: number, options?: unknown): Body;
         circle(x: number, y: number, r: number, options?: unknown): Body;
+        fromVertices(x:number,y:number,vertices:Point[][],options?:unknown):Body;
     };
     Body: {
         setVelocity(body: Body, v: Point): void;
@@ -63,6 +66,7 @@ type Piece = {
     hit: boolean;
     label: string | undefined;
     kind: "brick" | "tank" | "plank";
+    toughness:number;
 };
 type Scrap = {
     x: number;
@@ -111,15 +115,28 @@ export class DemolitionGame {
     private burst: Point | null = null;
     private burstAge = 0;
     private jumpCooldown = 0;
+    private progress=parseDemolitionProgress(null);
+    private blueprint=demolitionBlueprint(this.design);
+    private obstacles:{body:Body;w:number;h:number}[]=[];
+    private get challenge(){return demolitionChallenge(this.course);}
+    private lane=new URLSearchParams(location.search).get("lane");
+    private matchStarted=false;
+    private duelRound=0;
+    private requestedCourse=Math.max(0,Math.floor(Number(new URLSearchParams(location.search).get("challenge"))||0));
     start(): void {
         this.root = document.querySelector<HTMLElement>("#hud-root")!;
         this.root.className = "hud demo-ui";
+        try{this.progress=parseDemolitionProgress(localStorage.getItem("lobbers-demolition-progress"));this.course=this.progress.unlocked;}catch{/* Optional saves. */}
+        if(this.lane){this.course=this.requestedCourse;this.root.classList.add("demo-lane");}
         this.root.innerHTML = `<header class="demo-top"><div class="demo-brand">LOBBERS.<small>DOODLE DEMOLITION DEPARTMENT</small></div><div class="demo-ticket"><strong id="demoMission"></strong><span id="demoObjective">Draw a machine. Make a beautiful mess.</span></div><div class="demo-tools"><select id="demoCourse" aria-label="Demolition challenge">${COURSES.map((c, i) => `<option value="${i}">${c.name}</option>`).join("")}</select><button id="openGarageButton">✎ Draw your machine</button><button id="demoRetry" aria-label="Retry challenge">↻ Retry</button></div></header><section class="demo-score" aria-label="Challenge progress"><div><strong id="demoTargets">0 / 3</strong><small>TARGETS TOPPLED</small></div><div><strong id="demoTime">60</strong><small>SECONDS OF BAD IDEAS</small></div><div><strong id="demoFuel">100%</strong><small>THRUSTER</small></div></section><div class="demo-hint" id="demoHint" role="status"></div><nav class="demo-controls" aria-label="Machine controls"><div><button data-hold="left" aria-label="Drive left">← A</button><button data-hold="right" aria-label="Drive right">D →</button><button data-tap="hop">↑ Hop</button></div><div><button data-hold="boost">» Boost</button><button data-tap="water">≈ Water</button><button data-hold="hammer" class="hammer">Hold → HAMMER</button></div></nav><section class="demo-results" id="demoResults" role="dialog" aria-label="Challenge results" hidden><small>OFFICIAL DAMAGE REPORT</small><h2 id="demoResultTitle"></h2><p id="demoResultText"></p><button id="demoAgain">↻ Another bad idea</button><button id="demoNext">Next playground →</button></section>`;
         this.canvas = document.createElement("canvas");
         this.canvas.className = "demolition-canvas";
         this.canvas.setAttribute("aria-label", "Paper demolition playground. Drive with A/D, hop with Space, hold J and release to swing, Shift boosts, W sprays water, R retries.");
         document.querySelector("#game-root")!.replaceChildren(this.canvas);
         this.ctx = this.canvas.getContext("2d")!;
+        const plan=document.createElement("div");plan.className="demo-blueprint-stats";plan.id="demoBlueprintStats";this.root.append(plan);
+        if(!this.lane){const duel=document.createElement("a");duel.className="demo-duel-entry";duel.href="?mode=duel";duel.textContent="⚑ Side-by-side 1v1";this.root.append(duel);}
+        else{window.addEventListener("message",event=>{if(event.origin!==location.origin||event.source!==parent)return;const data=event.data;if(data?.type==="demo-start"){this.duelRound=Number(data.round)||0;this.matchStarted=true;this.reset();this.root.querySelector<HTMLButtonElement>("#openGarageButton")!.disabled=true;}if(data?.type==="demo-stop"){this.matchStarted=false;this.release();this.root.querySelector<HTMLButtonElement>("#openGarageButton")!.disabled=false;}if(data?.type==="demo-input"&&typeof data.key==="string"&&["left","right","boost","hammer","hop","water"].includes(data.key)){if(data.key==="hop"&&data.down)this.hop();else if(data.key==="water"&&data.down)this.spray();else this.input(data.key,Boolean(data.down));}});this.root.querySelector<HTMLElement>("#demoResults")!.style.display="none";}
         this.audio.preload();
         const sound = document.createElement("button");
         sound.type = "button";
@@ -133,8 +150,8 @@ export class DemolitionGame {
         this.root.querySelector("#openGarageButton")!.addEventListener("click", () => { this.release(); this.garage.show(); });
         for (const id of ["demoRetry", "demoAgain"])
             this.root.querySelector(`#${id}`)!.addEventListener("click", () => this.reset());
-        this.root.querySelector("#demoNext")!.addEventListener("click", () => { this.course = (this.course + 1) % COURSES.length; (this.root.querySelector("#demoCourse") as HTMLSelectElement).value = String(this.course); this.reset(); });
-        this.root.querySelector("#demoCourse")!.addEventListener("change", e => { this.course = Number((e.target as HTMLSelectElement).value); this.reset(); });
+        this.root.querySelector("#demoNext")!.addEventListener("click", () => { this.course = Math.min(this.progress.unlocked,this.course+1);this.reset(); });
+        this.root.querySelector("#demoCourse")!.addEventListener("change", e => { this.course = Math.min(this.progress.unlocked,Number((e.target as HTMLSelectElement).value)); this.reset(); });
         this.root.querySelectorAll<HTMLButtonElement>("[data-hold]").forEach(b => {
             b.addEventListener("pointerdown", e => { if (this.completed)
                 return; e.preventDefault(); b.setPointerCapture(e.pointerId); this.input(b.dataset.hold!, true); b.dataset.held = "true"; });
@@ -146,7 +163,7 @@ export class DemolitionGame {
         this.root.querySelectorAll<HTMLButtonElement>("[data-tap]").forEach(b => b.addEventListener("click", () => b.dataset.tap === "hop" ? this.hop() : this.spray()));
         const mapping: Record<string, string> = { a: "left", ArrowLeft: "left", d: "right", ArrowRight: "right", Shift: "boost", j: "hammer" };
         window.addEventListener("keydown", e => { if (this.paused() || /INPUT|SELECT/.test((e.target as HTMLElement)?.tagName))
-            return; const key = mapping[e.key]; if (key) {
+            return; if(this.lane){parent.postMessage({type:"demo-key",key:e.key,down:true},location.origin);if([" ","ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Enter","/"].includes(e.key))e.preventDefault();return;}const key = mapping[e.key]; if (key) {
             e.preventDefault();
             this.input(key, true);
         } if (!e.repeat) {
@@ -159,7 +176,7 @@ export class DemolitionGame {
             if (e.key.toLowerCase() === "r")
                 this.reset();
         } });
-        window.addEventListener("keyup", e => { const key = mapping[e.key]; if (key)
+        window.addEventListener("keyup", e => { if(this.lane){parent.postMessage({type:"demo-key",key:e.key,down:false},location.origin);return;}const key = mapping[e.key]; if (key)
             this.input(key, false); });
         window.addEventListener("blur", () => this.release());
         document.addEventListener("visibilitychange", () => { if (document.hidden)
@@ -170,10 +187,10 @@ export class DemolitionGame {
         this.reset();
         (window as unknown as {
             render_game_to_text: () => string;
-        }).render_game_to_text = () => JSON.stringify({ mode: "demolition", course: this.course, targets: this.score, goal: COURSES[this.course]!.goal, time: Math.ceil(this.time), fuel: Math.round(this.fuel), vehicle: { x: Math.round(this.chassis.position.x), y: Math.round(this.chassis.position.y) }, charge: this.charge, pieces: this.pieces.filter(p => p.hit).length, water: this.water.length, completed: this.completed });
+        }).render_game_to_text = () => JSON.stringify({ mode: "demolition", course: this.course, targets: this.score, goal: this.challenge.goal, time: Math.ceil(this.time), fuel: Math.round(this.fuel), vehicle: { x: Math.round(this.chassis.position.x), y: Math.round(this.chassis.position.y) }, charge: this.charge, pieces: this.pieces.filter(p => p.hit).length, water: this.water.length, completed: this.completed });
         requestAnimationFrame(t => this.frame(t));
     }
-    private paused() { return this.root.dataset.garageOpen === "true" || document.hidden; }
+    private paused() { return this.root.dataset.garageOpen === "true" || document.hidden || Boolean(this.lane&&!this.matchStarted); }
     private resize() { const ratio = Math.min(devicePixelRatio || 1, 2); this.canvas.width = Math.round(innerWidth * ratio); this.canvas.height = Math.round(innerHeight * ratio); }
     private input(key: string, down: boolean) { if (down)
         this.keys.add(key);
@@ -203,38 +220,44 @@ export class DemolitionGame {
         this.waterReleased = false;
         this.charge = 0;
         this.swing = 0;
-        this.time = 60;
+        this.time = this.challenge.time;
         this.score = 0;
         this.fuel = 100;
         this.completed = false;
         this.travel = 0;
         this.burst = null;
         this.jumpCooldown = 0;
+        this.obstacles=[];
         this.release();
         this.root.querySelector<HTMLElement>("#demoResults")!.hidden = true;
-        this.text("demoMission", COURSES[this.course]!.name);
-        this.text("demoHint", COURSES[this.course]!.hint);
+        this.text("demoMission", this.challenge.name);
+        this.text("demoHint", this.challenge.hint);
+        this.text("demoObjective",`CHALLENGE ${this.course+1} · ${this.progress.unlocked+1} unlocked · best ${this.progress.best[this.course]??0}`);
+        const picker=this.root.querySelector<HTMLSelectElement>("#demoCourse")!;
+        picker.innerHTML=Array.from({length:Math.min(this.progress.unlocked+2,10000)},(_,i)=>`<option value="${i}" ${i>this.progress.unlocked?'disabled':''}>${i+1}. ${demolitionChallenge(i).name}${i>this.progress.unlocked?' · locked':''}</option>`).join("");picker.value=String(this.course);
         const floor = M.Bodies.rectangle(1100, GROUND + 35, 2400, 70, { isStatic: true, friction: .8 });
         M.Composite.add(this.engine.world, [floor, M.Bodies.rectangle(-50, 400, 80, 900, { isStatic: true }), M.Bodies.rectangle(2300, 400, 80, 900, { isStatic: true })]);
         this.design = currentVehicle() ?? garageDefault();
-        this.chassis = M.Bodies.rectangle(350, 690, 120, 40, { density: .003, friction: .4, restitution: .1, collisionFilter: { group: -1 } });
+        this.blueprint=demolitionBlueprint(this.design);
+        this.text("demoBlueprintStats",`${Math.round(this.blueprint.width)} × ${Math.round(this.blueprint.height)} hull · ${(this.blueprint.massFactor*this.blueprint.efficiency).toFixed(1)}× impact · ${Math.round(this.blueprint.reach)} reach · ${this.blueprint.cost}/100 build${this.blueprint.cost>100?' · power reduced':''}`);
+        this.chassis = M.Bodies.fromVertices(350+this.blueprint.center.x,690+this.blueprint.center.y,[this.blueprint.vertices],{ density: .003, friction: .4, restitution: .1, collisionFilter: { group: -1 } });
         M.Composite.add(this.engine.world, [this.chassis]);
         const wheelParts = this.design.parts.filter(p => p.kind === "wheel");
         const mounts = wheelParts.length ? wheelParts.slice(0, 4) : [{ x: -55, y: 18, size: 20 }, { x: 55, y: 18, size: 20 }];
         for (const p of mounts) {
-            const offset = { x: p.x * .65, y: Math.max(12, p.y * .65 + 18) };
-            const wheel = M.Bodies.circle(350 + offset.x, 690 + offset.y, Math.max(10, p.size * .65), { density: .004, friction: 1.1, restitution: .15, collisionFilter: { group: -1 } });
+            const offset = { x: p.x * .65-this.blueprint.center.x, y: Math.max(12, p.y * .65 + 18)-this.blueprint.center.y };
+            const wheel = M.Bodies.circle(this.chassis.position.x + offset.x,this.chassis.position.y + offset.y,Math.max(10,p.size*.65),{ density: .004, friction: 1.1, restitution: .15, collisionFilter: { group: -1 } });
             const joint = M.Constraint.create({ bodyA: this.chassis, pointA: offset, bodyB: wheel, length: 0, stiffness: .7, damping: .15 });
             M.Composite.add(this.engine.world, [wheel, joint]);
             this.wheels.push(wheel);
         }
-        if (this.course === 0) {
+        if (this.challenge.layout === 0) {
             this.tower(720, 4, "BAKERY", true);
             this.tower(1010, 5, "HOTEL", true);
             this.tower(1330, 3, "NOODLES", true);
             this.tank(1570, 570);
         }
-        if (this.course === 1) {
+        if (this.challenge.layout === 1) {
             this.tower(670, 3, "PAPER MILL", true);
             this.tower(1080, 4, "BRIDGE CLUB", true);
             this.tower(1490, 3, "SOGGY CAFE", true);
@@ -242,11 +265,12 @@ export class DemolitionGame {
             for (let i = 0; i < 6; i++)
                 this.piece(780 + i * 65, 570, 62, 16, "#91b4ae", false, "plank");
         }
-        if (this.course === 2) {
+        if (this.challenge.layout === 2) {
             for (let i = 0; i < 4; i++)
                 this.tower(650 + i * 270, 3 + i % 2, ["OOPS", "UH OH", "YIKES", "FINALE"][i]!, true);
             this.tank(1750, 550);
         }
+        if(this.challenge.gate){const body=M.Bodies.rectangle(510,GROUND-130,180,80,{isStatic:true});M.Composite.add(this.engine.world,[body]);this.obstacles.push({body,w:180,h:80});}
         const scale = innerWidth <= 700 ? .65 : Math.max(.45, Math.min(innerWidth / 1440, innerHeight / 900));
         this.camera = Math.max(0, 350 - innerWidth / scale * (innerWidth <= 700 ? .25 : .35));
         this.accumulator = 0;
@@ -254,12 +278,13 @@ export class DemolitionGame {
     }
     private piece(x: number, y: number, w: number, h: number, color: string, target = false, kind: Piece["kind"] = "brick", label?: string): Piece {
         const body = M.Bodies.rectangle(x, y, w, h, { density: kind === "tank" ? .0009 : .0015, friction: .65, restitution: .07 });
-        const p = { body, w, h, color, target, hit: false, start: { x, y }, kind, label };
+        const p = { body, w, h, color, target, hit: false, start: { x, y }, kind, label,toughness:this.challenge.reinforcement*(w<30?1.1:.65) };
         this.pieces.push(p);
         M.Composite.add(this.engine.world, [body]);
         return p;
     }
     private tower(x: number, floors: number, name: string, target: boolean) {
+        if(this.challenge.chapter>0)floors+=1+(this.challenge.chapter%2);
         const left = this.piece(x - 52, GROUND - 34, 24, 68, "#d75c46");
         const right = this.piece(x + 52, GROUND - 34, 24, 68, "#d75c46");
         let prev = [left, right];
@@ -278,7 +303,8 @@ export class DemolitionGame {
         return; const grounded = this.wheels.some(w => w.position.y > GROUND - 35) || this.pieces.some(p => Math.abs(p.body.position.x - this.chassis.position.x) < 90 && p.body.position.y > this.chassis.position.y && p.body.position.y - this.chassis.position.y < 70); if (!grounded)
         return; for (const b of [this.chassis, ...this.wheels])
         M.Body.setVelocity(b, { x: b.velocity.x, y: -9 }); this.jumpCooldown = .7; }
-    private hammerAnchor(): Point { const mount = this.design.parts.find(p => p.kind === "cannon"); const x = (mount?.x ?? 15) * .65 * this.facing, y = (mount?.y ?? -25) * .65; const angle = this.chassis.angle; return { x: this.chassis.position.x + x * Math.cos(angle) - y * Math.sin(angle), y: this.chassis.position.y + x * Math.sin(angle) + y * Math.cos(angle) }; }
+    private machineOrigin():Point {const c=this.blueprint.center,a=this.chassis.angle;return {x:this.chassis.position.x-c.x*Math.cos(a)+c.y*Math.sin(a),y:this.chassis.position.y-c.x*Math.sin(a)-c.y*Math.cos(a)};}
+    private hammerAnchor(): Point { const mount = this.design.parts.find(p => p.kind === "cannon"); const x = (mount?.x ?? 15) * .65 * this.facing, y = (mount?.y ?? -25) * .65; const angle = this.chassis.angle;const origin=this.machineOrigin();return { x: origin.x + x * Math.cos(angle) - y * Math.sin(angle), y: origin.y + x * Math.sin(angle) + y * Math.cos(angle) }; }
     private strike() {
         if (this.completed || this.paused())
             return;
@@ -291,7 +317,9 @@ export class DemolitionGame {
             const dx = p.body.position.x - origin.x;
             const dy = p.body.position.y - (origin.y - 25);
             if (dx * this.facing > -40 && dx * this.facing < reach && Math.abs(dy) < 110) {
-                this.breakPiece(p, power);
+                p.toughness-=power*this.blueprint.massFactor*this.blueprint.efficiency;
+                if(p.toughness<=0)this.breakPiece(p,power*this.blueprint.massFactor*this.blueprint.efficiency);
+                else {this.scraps(p.body.position.x,p.body.position.y,4,"#b98ac6");this.text("demoHint","Reinforced! Charge again, or draw a heavier hull for more impact.");}
                 hits++;
             }
         }
@@ -376,7 +404,7 @@ export class DemolitionGame {
         if (this.chassis.position.y > 1000)
             this.recover();
         this.hud();
-        if (this.score >= COURSES[this.course]!.goal || this.time <= 0)
+        if (this.score >= this.challenge.goal || this.time <= 0)
             this.finish();
     }
     private recover() { for (const b of [this.chassis, ...this.wheels]) {
@@ -384,7 +412,9 @@ export class DemolitionGame {
         M.Body.setVelocity(b, { x: 0, y: 0 });
         M.Body.setAngularVelocity(b, 0);
     } this.text("demoHint", "Back on your wheels. Keep making bad decisions."); }
-    private finish() { this.completed = true; this.hud(); this.release(); const won = this.score >= COURSES[this.course]!.goal; this.audio.play(won ? "round-win" : "round-lose"); this.text("demoResultTitle", won ? "Beautiful disaster." : "Needs more chaos."); const points = this.score * 1000 + Math.ceil(this.time) * 10; try {
+    private finish() { this.completed = true; this.hud(); this.release(); const won = this.score >= this.challenge.goal; this.audio.play(won ? "round-win" : "round-lose"); this.text("demoResultTitle", won ? "Beautiful disaster." : "Needs more chaos."); const points = this.score * 1000 + Math.ceil(this.time) * 10;
+        if(!this.lane){this.progress=completeDemolition(this.progress,this.course,points,won);try{localStorage.setItem("lobbers-demolition-progress",JSON.stringify(this.progress));}catch{/* Keep progress in memory. */}}
+        this.root.querySelector<HTMLButtonElement>("#demoNext")!.disabled=!won;this.text("demoNext",won?`Challenge ${this.course+2} unlocked →`:"Finish this challenge to advance");try {
         this.best = Math.max(points, Number(localStorage.getItem(`lobbers-demo-best-${this.course}`) || 0));
         localStorage.setItem(`lobbers-demo-best-${this.course}`, String(this.best));
     }
@@ -393,7 +423,7 @@ export class DemolitionGame {
     } this.text("demoResultText", `${this.score} targets toppled · ${points.toLocaleString()} damage points · Best ${this.best.toLocaleString()}. ${won ? "Your invention passed inspection. Somehow." : "Move a wheel, charge a bigger swing, or break the tank. Try another idea."}`); this.root.querySelector<HTMLElement>("#demoResults")!.hidden = false; }
     private text(id: string, value: string) { const el = this.root.querySelector(`#${id}`)!; if (el.textContent !== value)
         el.textContent = value; }
-    private hud() { this.text("demoTargets", `${this.score} / ${COURSES[this.course]!.goal}`); this.text("demoTime", String(Math.ceil(this.time))); this.text("demoFuel", `${Math.round(this.fuel)}%`); this.root.dataset.demoTargets = String(this.score); this.root.dataset.demoCompleted = String(this.completed); }
+    private hud() { this.text("demoTargets", `${this.score} / ${this.challenge.goal}`); this.text("demoTime", String(Math.ceil(this.time))); this.text("demoFuel", `${Math.round(this.fuel)}%`); this.root.dataset.demoTargets = String(this.score); this.root.dataset.demoCompleted = String(this.completed);if(this.lane)parent.postMessage({type:"demo-state",round:this.duelRound,lane:this.lane,course:this.course,targets:this.score,goal:this.challenge.goal,time:this.time,completed:this.completed,garage:this.root.dataset.garageOpen==="true"},location.origin); }
     private frame(t: number) { const elapsed = Math.min(.08, (t - this.last) / 1000 || 0); this.last = t; if (!this.paused()) {
         this.accumulator += elapsed;
         let n = 0;
@@ -403,12 +433,12 @@ export class DemolitionGame {
         }
     }
     else
-        this.accumulator = 0; this.draw(t); requestAnimationFrame(t2 => this.frame(t2)); }
+        this.accumulator = 0; if(this.lane)this.hud();this.draw(t); requestAnimationFrame(t2 => this.frame(t2)); }
     private draw(t: number) {
         const ctx = this.ctx;
         const w = innerWidth, h = innerHeight;
         const phone = w <= 700;
-        const scale = phone ? .65 : Math.max(.45, Math.min(w / 1440, h / 900));
+        const scale = this.lane?Math.max(.4,Math.min(.65,(h-130)/450)):phone ? .65 : Math.max(.45, Math.min(w / 1440, h / 900));
         const vw = w / scale;
         this.camera += (Math.max(0, Math.min(2200 - vw, this.chassis.position.x - vw * (phone ? .25 : .35))) - this.camera) * .08;
         ctx.setTransform(this.canvas.width / w, 0, 0, this.canvas.height / h, 0, 0);
@@ -416,7 +446,7 @@ export class DemolitionGame {
         ctx.fillRect(0, 0, w, h);
         ctx.save();
         ctx.scale(scale, scale);
-        ctx.translate(-this.camera, (h - (phone ? 170 : 105)) / scale - GROUND);
+        ctx.translate(-this.camera, (h - (this.lane?85:phone ? 170 : 105)) / scale - GROUND);
         ctx.strokeStyle = "#263d380b";
         ctx.lineWidth = 1;
         for (let x = 0; x < 2400; x += 35) {
@@ -458,6 +488,7 @@ export class DemolitionGame {
             ctx.font = "10px Arial";
             ctx.fillText(`${x / 10} m`, x, GROUND + 25);
         }
+        for(const o of this.obstacles){ctx.fillStyle="#b98ac6";ctx.strokeStyle="#263d38";ctx.lineWidth=3;ctx.fillRect(o.body.position.x-o.w/2,o.body.position.y-o.h/2,o.w,o.h);ctx.strokeRect(o.body.position.x-o.w/2,o.body.position.y-o.h/2,o.w,o.h);ctx.fillStyle="#263d38";ctx.font="bold 12px Arial";ctx.textAlign="center";ctx.fillText("LOW CLEARANCE",o.body.position.x,o.body.position.y);}
         for (const p of this.pieces) {
             ctx.save();
             ctx.translate(p.body.position.x, p.body.position.y);
@@ -503,7 +534,7 @@ export class DemolitionGame {
             ctx.arc(b.position.x, b.position.y, 5, 0, Math.PI * 2);
             ctx.fill();
         }
-        const p = this.chassis.position;
+        const p = this.machineOrigin();
         ctx.save();
         ctx.translate(p.x, p.y);
         ctx.rotate(this.chassis.angle);

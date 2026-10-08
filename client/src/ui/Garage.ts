@@ -46,7 +46,7 @@ export class Garage {
       </div><footer class="garage-footer"><p>Mechanical parts use the existing weapons, dash and armor. Every ride keeps the same battle hitbox.</p><div><button type="button" data-garage="stock">Use stock tank</button><button type="button" class="garage-save" data-garage="save">SAVE &amp; USE THIS RIDICULOUS THING ↗</button></div></footer>`;
     root.append(this.panel);
     if (mode === "demolition") {
-      this.panel.querySelector(".garage-footer p")!.textContent = "Wheel placement changes balance and grip. Thruster height changes torque. Cannon mounts become your folding hammer. Draw a charged pose for its windup.";
+      this.panel.querySelector(".garage-footer p")!.textContent = "Your hull becomes a physical outline: bigger drawings hit harder; low ones fit arches. Wheels change grip. Move the hammer and thruster. Both modes share a 100-point budget; overbuilding reduces impact.";
       this.panel.querySelector("[data-tool='cannon']")!.innerHTML = '<b aria-hidden="true">↗</b>Hammer mount';
       this.panel.querySelector("[data-tool='shield']")!.innerHTML = '<b aria-hidden="true">◈</b>Decoration';
       this.panel.querySelector("[data-garage='stock']")!.textContent = "Use starter buggy";
