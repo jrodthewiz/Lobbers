@@ -1,41 +1,33 @@
-# Lobbers — Backyard Battle Club
+# Lobbers — Doodle Demolition
 
-A multiplayer artillery game with cute pilots, procedural terrain, eight weapons, and a drawing garage. Built with Phaser, Vite, TypeScript, and Colyseus.
+Draw a ridiculous machine. Bring down a paper city.
 
-## Play
+The default game is a real-time solo physics playground: drive a handmade vehicle, unfold a charged hammer, break supports, and topple starred cardboard targets. Three authored challenges, a burstable water tank, water spray, boost, and instant retry reward invention and chain reactions. Complete the targets before the 60-second clock expires. Results show damage points and a locally saved personal best.
 
-Host a lobby and share its code, join an open backyard, or choose **Let's Lob** for a practice bot. Mark Ready to start. Each turn has movement, firing, and flight resolution. The last surviving side wins.
+## Controls
 
-- Desktop: A/D or arrows move, Space hops, Shift dashes. Aim with the pointer, hold the left button for power, and release. Escape cancels charging.
-- Weapons: 1–8 select; Q/E cycle. Extra weapons require supplies.
-- Camera: wheel or +/- zoom; Z toggles overview; F enables free camera; 0 resets.
-- Phone: hold arrow buttons to move, tap HOP/DASH, and touch-hold-release on the arena to fire. Map scouts the arena.
+- A/D or arrows: drive. Space: hop when grounded.
+- Hold J, then release: charge and swing the folding hammer.
+- Hold Shift: boost. W: spray water. Both use regenerating fuel.
+- R or Retry: immediately restart. Choose a challenge from the top selector.
+- Phone: hold drive, boost, and hammer buttons; tap Hop and Water.
 
-## Draw your ride and effects
+## Draw your machine
 
-Open **Draw Your Own Ride** from the menu. Draw filled hulls or freehand ink, place mechanical parts, drag their mounts, adjust size, and undo. Start from a buggy, crawler, or saucer. The live bench previews rotating wheels, vector aiming, exhaust, and shields.
+Open **Draw your machine** to pause the challenge. Draw hulls and ink, drag mechanical parts, resize them, or start from a preset. Wheel mounts and sizes affect balance and traction; thruster height affects torque; cannon mounts become folding hammer anchors and their size affects reach. Hull artwork decorates a bounded physical chassis. Shield coils are decorative in demolition.
 
-The four drawing frames are Ride / Beginning, Charged / End, Burst / Beginning, and Burst / End. Copy a starting frame, change its silhouette, and watch it interpolate. Arc-length resampling supports drawings with different point counts; closed outlines align across different start corners and drawing directions. The chassis morphs with charge, and your drawn burst plays when a projectile lands. Test the effect in the garage before saving.
+Draw a Charged / End silhouette to morph your body during windup. Burst / Beginning and Burst / End drawings become your hammer impact animation. Arc-length interpolation supports different point counts and aligns closed contours. Save to rebuild and immediately test the machine. Blueprints persist locally.
 
-Save a blueprint to use it in battle. Designs persist locally and replicate to rivals through multiplayer. Custom rides retain the same collision hull and existing weapons, dash, and armor rules. Blueprint changes are accepted outside active rounds. Geometry and payload sizes are validated on both network paths.
+This first demolition release is solo. The earlier multiplayer artillery game and its room/peer transports remain accessible at `/?mode=artillery`; its match rules and blueprint replication are unchanged.
 
-Choose Sunday Club, Golden Grudge, or Moon Mayhem for your arena atmosphere. A tactical map, actual shot traces, impact particles, victory confetti, earned match honors, and a local club record support the duel. Sound has a saved mute preference.
-
-## Run
+## Run and verify
 
 ```powershell
 npm install
 npm run dev
-```
-
-The development launcher prints its available ports, normally client `http://localhost:5183` and server `http://localhost:2577`.
-
-## Validate
-
-```powershell
 npm test
 npm run build
 npm run playtest
 ```
 
-For an installed Chromium, set `LOBBERS_BROWSER_PATH` before browser tests. Production builds to `dist/client`; the server serves it when `NODE_ENV=production`. Railway uses `railway.json` for build, start, and health checks.
+The development launcher normally starts client `http://localhost:5183` and server `http://localhost:2577`. Set `LOBBERS_BROWSER_PATH` to an installed Chromium executable for browser tests. Production builds to `dist/client`; the server serves it in production. Railway uses the existing `railway.json` build, start, and health checks.

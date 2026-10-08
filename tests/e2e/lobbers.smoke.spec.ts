@@ -38,13 +38,13 @@ test("host and join lobby smoke", async ({ browser }) => {
   const hostPage = await browser.newPage();
   const guestPage = await browser.newPage();
 
-  await hostPage.goto("/", { waitUntil: "domcontentloaded" });
+  await hostPage.goto("/?mode=artillery", { waitUntil: "domcontentloaded" });
   await hostPage.getByRole("button", { name: "Host Lobby" }).click();
   await expect(hostPage.locator("#roomCode")).not.toHaveText("------");
   const code = (await hostPage.locator("#roomCode").textContent())?.trim() ?? "";
   expect(code).toHaveLength(6);
 
-  await guestPage.goto("/", { waitUntil: "domcontentloaded" });
+  await guestPage.goto("/?mode=artillery", { waitUntil: "domcontentloaded" });
   await guestPage.getByRole("button", { name: "Browse Lobbies" }).click();
   await expect(guestPage.locator("#lobbyListRows")).toContainText(code);
   await guestPage.locator("#joinCodeInput").fill(code);
@@ -63,7 +63,7 @@ test("host and join lobby smoke", async ({ browser }) => {
 
 test("practice bot smoke", async ({ page }, testInfo) => {
   test.setTimeout(60_000);
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/?mode=artillery", { waitUntil: "domcontentloaded" });
   await page.locator("#botButton").waitFor({ state: "visible" });
   const lobbyScreenshotPath = testInfo.outputPath("lobby-menu.png");
   await page.screenshot({ path: lobbyScreenshotPath });
@@ -78,7 +78,7 @@ test("practice bot smoke", async ({ page }, testInfo) => {
 
 test("practice controls and combat smoke", async ({ page }, testInfo) => {
   test.setTimeout(60_000);
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/?mode=artillery", { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "Practice Bot" }).click();
   await page.getByRole("button", { name: "Mark Ready" }).click();
   await expect(page.locator("#roomChip")).toHaveAttribute("data-round-state", "active");
@@ -421,7 +421,7 @@ test("practice controls and combat smoke", async ({ page }, testInfo) => {
 
 test("active HUD controls do not overlap across key viewports", async ({ page }) => {
   test.setTimeout(60_000);
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/?mode=artillery", { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "Practice Bot" }).click();
   await page.getByRole("button", { name: "Mark Ready" }).click();
   await expect(page.locator("#roomChip")).toHaveAttribute("data-round-state", "active", { timeout: 5000 });

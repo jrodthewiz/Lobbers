@@ -1,5 +1,9 @@
 # Backyard Battle Club
 
+## Doodle Demolition
+
+The default game is now a real-time solo contraption demolition playground. Warm graph paper, dark ink silhouettes, cardboard buildings, red support beams, and starred targets make cause and effect legible. The playable world owns the screen; a compact challenge ticket, target count, time, fuel, and chunky hold controls surround it. Yellow signals a charged hammer and successful destruction. Keep instant retry available. No waiting turns or health inventory in this mode. Touch and keyboard have the same drive, hop, hammer, boost, and water actions. The garage pauses the challenge. Wheel placement and thruster height affect the physics; freehand hulls remain expressive skins over a bounded physical chassis. Charged poses and drawn bursts respond to actual hammer actions. The older artillery game remains available at ?mode=artillery.
+
 Lobbers is a scrappy toy-tank duel with a serious grudge and unserious pilots. The opening screen is a club poster: enormous condensed lettering, warm paper, a hand-drawn battle illustration, and a single coral bot-match action. Teal and coral preserve blue/red team meanings.
 
 Use dark ink outlines, offset print shadows, pill-shaped tickets, and yellow reward accents. Quiet these motifs during play. The arena owns the center; health stays at the top, weapons at the bottom, and turn instructions sit below the scoreboard. Movement and firing must be distinct, with a readable countdown. Celebrate verified damage and summarize actual match statistics.

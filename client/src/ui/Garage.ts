@@ -27,7 +27,7 @@ export class Garage {
   private frameStart = 0;
   private testThrust = 0;
   private testShield = false;
-  constructor(private readonly root: HTMLElement) {
+  constructor(private readonly root: HTMLElement, private readonly mode: "battle" | "demolition" = "battle") {
     this.panel = document.createElement("section");
     this.panel.className = "drawing-garage"; this.panel.hidden = true;
     this.panel.setAttribute("role", "dialog"); this.panel.setAttribute("aria-modal", "true"); this.panel.setAttribute("aria-label", "Contraption garage");
@@ -45,6 +45,13 @@ export class Garage {
         </div>
       </div><footer class="garage-footer"><p>Mechanical parts use the existing weapons, dash and armor. Every ride keeps the same battle hitbox.</p><div><button type="button" data-garage="stock">Use stock tank</button><button type="button" class="garage-save" data-garage="save">SAVE &amp; USE THIS RIDICULOUS THING ↗</button></div></footer>`;
     root.append(this.panel);
+    if (mode === "demolition") {
+      this.panel.querySelector(".garage-footer p")!.textContent = "Wheel placement changes balance and grip. Thruster height changes torque. Cannon mounts become your folding hammer. Draw a charged pose for its windup.";
+      this.panel.querySelector("[data-tool='cannon']")!.innerHTML = '<b aria-hidden="true">↗</b>Hammer mount';
+      this.panel.querySelector("[data-tool='shield']")!.innerHTML = '<b aria-hidden="true">◈</b>Decoration';
+      this.panel.querySelector("[data-garage='stock']")!.textContent = "Use starter buggy";
+      this.panel.querySelector("#garageTip")!.textContent = "Draw a machine, move its wheels, and make a beautiful mess.";
+    }
     const frames = document.createElement("div"); frames.className = "garage-frame-tabs";
     frames.setAttribute("role", "group"); frames.setAttribute("aria-label", "Animation drawing frames");
     frames.innerHTML = `<span>DRAW THE BEFORE. DRAW THE AFTER. LET PHYSICS DO THE REST.</span><div><button type="button" data-stage="vehicle" aria-pressed="true">Ride / beginning</button><button type="button" data-stage="pose" aria-pressed="false">Charged / end</button><button type="button" data-stage="start" aria-pressed="false">Burst / beginning</button><button type="button" data-stage="end" aria-pressed="false">Burst / end</button></div><div class="garage-animation-actions"><button type="button" data-frame-copy>Copy beginning → end</button><button type="button" data-effect-test>Test drawn burst ✹</button><span id="garageFrameHint">Your wheels and aim animate procedurally.</span></div>`;
@@ -93,7 +100,8 @@ export class Garage {
     this.panel.querySelectorAll<HTMLButtonElement>("[data-tool]").forEach(button => button.addEventListener("click", () => {
       this.tool = button.dataset.tool as Tool;
       this.panel.querySelectorAll("[data-tool]").forEach(b => b.setAttribute("aria-pressed", String(b === button)));
-      this.tip(this.tool in PART_INFO ? PART_INFO[this.tool as MechanicalKind] : this.tool === "select" ? "Grab a part and drag it. Adjust its size below. Wheels turn using vector travel." : this.tool === "hull" ? "Draw a closed silhouette. We fill and outline it when you lift your finger." : this.tool === "erase" ? "Tap a part or an ink stroke to remove it. Undo brings it back." : "Draw stripes, eyes, bolts, lightning, a questionable spoiler…");
+      const demolitionInfo:Partial<Record<MechanicalKind,string>> = { cannon:"Move the hammer anchor. Larger mounts increase reach. Hold J and release to swing.",thruster:"Move the thruster higher or lower to change its torque. Hold Boost to test it in the playground.",shield:"A decorative coil for your machine. It does not add armor in demolition." };
+      this.tip(this.tool in PART_INFO ? (this.mode === "demolition" ? demolitionInfo[this.tool as MechanicalKind] : undefined) ?? PART_INFO[this.tool as MechanicalKind] : this.tool === "select" ? "Grab a part and drag it. Adjust its size below. Wheels turn using vector travel." : this.tool === "hull" ? "Draw a closed silhouette. We fill and outline it when you lift your finger." : this.tool === "erase" ? "Tap a part or an ink stroke to remove it. Undo brings it back." : "Draw stripes, eyes, bolts, lightning, a questionable spoiler…");
     }));
     this.panel.querySelectorAll<HTMLButtonElement>("[data-ink]").forEach(button => button.addEventListener("click", () => {
       this.color = button.dataset.ink!;
