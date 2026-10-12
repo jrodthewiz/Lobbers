@@ -67,6 +67,7 @@ type Piece = {
     label: string | undefined;
     kind: "brick" | "tank" | "plank";
     toughness:number;
+    toughnessMax:number;
 };
 type Scrap = {
     x: number;
@@ -121,6 +122,7 @@ export class DemolitionGame {
     private get challenge(){return demolitionChallenge(this.course);}
     private lane=new URLSearchParams(location.search).get("lane");
     private matchStarted=false;
+    private matchPaused=false;
     private duelRound=0;
     private requestedCourse=Math.max(0,Math.floor(Number(new URLSearchParams(location.search).get("challenge"))||0));
     start(): void {
@@ -136,7 +138,7 @@ export class DemolitionGame {
         this.ctx = this.canvas.getContext("2d")!;
         const plan=document.createElement("div");plan.className="demo-blueprint-stats";plan.id="demoBlueprintStats";this.root.append(plan);
         if(!this.lane){const duel=document.createElement("a");duel.className="demo-duel-entry";duel.href="?mode=duel";duel.textContent="⚑ Side-by-side 1v1";this.root.append(duel);}
-        else{window.addEventListener("message",event=>{if(event.origin!==location.origin||event.source!==parent)return;const data=event.data;if(data?.type==="demo-start"){this.duelRound=Number(data.round)||0;this.matchStarted=true;this.reset();this.root.querySelector<HTMLButtonElement>("#openGarageButton")!.disabled=true;}if(data?.type==="demo-stop"){this.matchStarted=false;this.release();this.root.querySelector<HTMLButtonElement>("#openGarageButton")!.disabled=false;}if(data?.type==="demo-input"&&typeof data.key==="string"&&["left","right","boost","hammer","hop","water"].includes(data.key)){if(data.key==="hop"&&data.down)this.hop();else if(data.key==="water"&&data.down)this.spray();else this.input(data.key,Boolean(data.down));}});this.root.querySelector<HTMLElement>("#demoResults")!.style.display="none";}
+        else{window.addEventListener("message",event=>{if(event.origin!==location.origin||event.source!==parent)return;const data=event.data;if(data?.type==="demo-pause"){this.matchPaused=Boolean(data.paused);this.release();}if(data?.type==="demo-cancel")this.release();if(data?.type==="demo-start"){this.matchPaused=false;this.duelRound=Number(data.round)||0;this.matchStarted=true;this.reset();this.root.querySelector<HTMLButtonElement>("#openGarageButton")!.disabled=true;}if(data?.type==="demo-stop"){this.matchStarted=false;this.release();this.root.querySelector<HTMLButtonElement>("#openGarageButton")!.disabled=false;}if(data?.type==="demo-input"&&typeof data.key==="string"&&["left","right","boost","hammer","hop","water"].includes(data.key)){if(data.key==="hop"&&data.down)this.hop();else if(data.key==="water"&&data.down)this.spray();else this.input(data.key,Boolean(data.down));}});this.root.querySelector<HTMLElement>("#demoResults")!.style.display="none";}
         this.audio.preload();
         const sound = document.createElement("button");
         sound.type = "button";
@@ -157,13 +159,14 @@ export class DemolitionGame {
                 return; e.preventDefault(); b.setPointerCapture(e.pointerId); this.input(b.dataset.hold!, true); b.dataset.held = "true"; });
             const up = () => { this.input(b.dataset.hold!, false); b.dataset.held = "false"; };
             b.addEventListener("pointerup", up);
-            b.addEventListener("pointercancel", up);
-            b.addEventListener("lostpointercapture", up);
+            const cancel=()=>{this.keys.delete(b.dataset.hold!);if(b.dataset.hold==="hammer"){this.charging=false;this.charge=0;}b.dataset.held="false";};
+            b.addEventListener("pointercancel", cancel);
+            b.addEventListener("lostpointercapture", cancel);
         });
         this.root.querySelectorAll<HTMLButtonElement>("[data-tap]").forEach(b => b.addEventListener("click", () => b.dataset.tap === "hop" ? this.hop() : this.spray()));
         const mapping: Record<string, string> = { a: "left", ArrowLeft: "left", d: "right", ArrowRight: "right", Shift: "boost", j: "hammer" };
         window.addEventListener("keydown", e => { if (this.paused() || /INPUT|SELECT/.test((e.target as HTMLElement)?.tagName))
-            return; if(this.lane){parent.postMessage({type:"demo-key",key:e.key,down:true},location.origin);if([" ","ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Enter","/"].includes(e.key))e.preventDefault();return;}const key = mapping[e.key]; if (key) {
+            return; if(this.lane){if(e.repeat&&[" ","w","W","ArrowUp","/"].includes(e.key))return;parent.postMessage({type:"demo-key",key:e.key,down:true},location.origin);if([" ","ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Enter","/"].includes(e.key))e.preventDefault();return;}const key = mapping[e.key]??mapping[e.key.toLowerCase()]; if (key) {
             e.preventDefault();
             this.input(key, true);
         } if (!e.repeat) {
@@ -176,7 +179,7 @@ export class DemolitionGame {
             if (e.key.toLowerCase() === "r")
                 this.reset();
         } });
-        window.addEventListener("keyup", e => { if(this.lane){parent.postMessage({type:"demo-key",key:e.key,down:false},location.origin);return;}const key = mapping[e.key]; if (key)
+        window.addEventListener("keyup", e => { if(this.lane){parent.postMessage({type:"demo-key",key:e.key,down:false},location.origin);return;}const key = mapping[e.key]??mapping[e.key.toLowerCase()]; if (key)
             this.input(key, false); });
         window.addEventListener("blur", () => this.release());
         document.addEventListener("visibilitychange", () => { if (document.hidden)
@@ -190,9 +193,9 @@ export class DemolitionGame {
         }).render_game_to_text = () => JSON.stringify({ mode: "demolition", course: this.course, targets: this.score, goal: this.challenge.goal, time: Math.ceil(this.time), fuel: Math.round(this.fuel), vehicle: { x: Math.round(this.chassis.position.x), y: Math.round(this.chassis.position.y) }, charge: this.charge, pieces: this.pieces.filter(p => p.hit).length, water: this.water.length, completed: this.completed });
         requestAnimationFrame(t => this.frame(t));
     }
-    private paused() { return this.root.dataset.garageOpen === "true" || document.hidden || Boolean(this.lane&&!this.matchStarted); }
+    private paused() { return this.root.dataset.garageOpen === "true" || document.hidden || Boolean(this.lane&&(!this.matchStarted||this.matchPaused)); }
     private resize() { const ratio = Math.min(devicePixelRatio || 1, 2); this.canvas.width = Math.round(innerWidth * ratio); this.canvas.height = Math.round(innerHeight * ratio); }
-    private input(key: string, down: boolean) { if (down)
+    private input(key: string, down: boolean) { if(down&&(this.completed||this.paused()))return;if (down)
         this.keys.add(key);
     else
         this.keys.delete(key); if (key === "hammer") {
@@ -278,7 +281,8 @@ export class DemolitionGame {
     }
     private piece(x: number, y: number, w: number, h: number, color: string, target = false, kind: Piece["kind"] = "brick", label?: string): Piece {
         const body = M.Bodies.rectangle(x, y, w, h, { density: kind === "tank" ? .0009 : .0015, friction: .65, restitution: .07 });
-        const p = { body, w, h, color, target, hit: false, start: { x, y }, kind, label,toughness:this.challenge.reinforcement*(w<30?1.1:.65) };
+        const toughness=this.challenge.reinforcement*(w<30?1.1:.65);
+        const p = { body, w, h, color, target, hit: false, start: { x, y }, kind, label,toughness,toughnessMax:toughness };
         this.pieces.push(p);
         M.Composite.add(this.engine.world, [body]);
         return p;
@@ -313,13 +317,14 @@ export class DemolitionGame {
         const origin = this.hammerAnchor();
         const reach = 100 + power * (this.design.parts.find(p => p.kind === "cannon")?.size ?? 18) * 5;
         let hits = 0;
+        let broken=0,reinforced=0;
         for (const p of this.pieces) {
             const dx = p.body.position.x - origin.x;
             const dy = p.body.position.y - (origin.y - 25);
             if (dx * this.facing > -40 && dx * this.facing < reach && Math.abs(dy) < 110) {
                 p.toughness-=power*this.blueprint.massFactor*this.blueprint.efficiency;
-                if(p.toughness<=0)this.breakPiece(p,power*this.blueprint.massFactor*this.blueprint.efficiency);
-                else {this.scraps(p.body.position.x,p.body.position.y,4,"#b98ac6");this.text("demoHint","Reinforced! Charge again, or draw a heavier hull for more impact.");}
+                if(p.toughness<=0){this.breakPiece(p,power*this.blueprint.massFactor*this.blueprint.efficiency);broken++;}
+                else {reinforced++;this.scraps(p.body.position.x,p.body.position.y,4,"#b98ac6");}
                 hits++;
             }
         }
@@ -328,8 +333,9 @@ export class DemolitionGame {
         this.scraps(this.burst.x, this.burst.y, hits ? 22 : 7, "#f0c34b");
         this.charge = 0;
         this.audio.play(hits ? "fragment-impact" : "throw-release");
-        if (hits)
-            this.text("demoHint", hits > 2 ? "That's a chain reaction. Our lawyers are delighted." : "Support removed. Stand back and admire your terrible work.");
+        if(reinforced)this.text("demoHint",`${reinforced} reinforced piece${reinforced===1?'':'s'} still holding. Charge again or build a heavier hull.${broken?` ${broken} broken.`:''}`);
+        else if(broken)this.text("demoHint",broken>2?"That's a chain reaction. Our lawyers are delighted.":"Support removed. Stand back and admire your terrible work.");
+        else this.text("demoHint","Out of reach. Move closer or extend your hammer mount.");
     }
     private breakPiece(p: Piece, power: number) { for (const j of [...this.joints])
         if (j.bodyA === p.body || j.bodyB === p.body) {
@@ -498,6 +504,7 @@ export class DemolitionGame {
             ctx.lineWidth = 2.5;
             ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
             ctx.strokeRect(-p.w / 2, -p.h / 2, p.w, p.h);
+            if(p.toughnessMax>0&&p.toughness>0){ctx.fillStyle="#263d38";ctx.fillRect(-p.w/2+3,-p.h/2+3,p.w-6,5);ctx.fillStyle="#b98ac6";ctx.fillRect(-p.w/2+4,-p.h/2+4,(p.w-8)*Math.max(0,p.toughness/p.toughnessMax),3);ctx.fillStyle="#263d38";ctx.beginPath();ctx.arc(-p.w/2+8,p.h/2-8,3,0,Math.PI*2);ctx.fill();}
             if (p.kind === "tank") {
                 ctx.fillStyle = "#237f8780";
                 ctx.fillRect(-p.w / 2 + 5, 0, p.w - 10, p.h / 2 - 5);

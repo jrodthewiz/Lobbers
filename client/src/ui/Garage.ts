@@ -1,6 +1,7 @@
 import { cloneVehicle, createVehiclePreset, parseVehicleDesign, VEHICLE_COLORS, type MechanicalKind, type VehicleDesign, type VectorPoint } from "../../../shared/game/vehicleDesign";
 import { drawEffectCanvas, drawVehicleCanvas, garageDefault, saveVehicle } from "../game/vehicleArt";
 import { createBurstFrames } from "../../../shared/game/vectorMorph";
+import { demolitionBlueprint } from "../../../shared/game/demolitionBlueprint";
 import type { VehicleStroke } from "../../../shared/game/vehicleDesign";
 
 type Tool = "select" | "hull" | "ink" | "erase" | MechanicalKind;
@@ -46,6 +47,7 @@ export class Garage {
       </div><footer class="garage-footer"><p>Mechanical parts use the existing weapons, dash and armor. Every ride keeps the same battle hitbox.</p><div><button type="button" data-garage="stock">Use stock tank</button><button type="button" class="garage-save" data-garage="save">SAVE &amp; USE THIS RIDICULOUS THING ↗</button></div></footer>`;
     root.append(this.panel);
     if (mode === "demolition") {
+      const readout=document.createElement("p");readout.id="garagePhysics";readout.className="garage-physics";readout.setAttribute("aria-live","polite");this.panel.querySelector(".garage-presets")!.before(readout);
       this.panel.querySelector(".garage-footer p")!.textContent = "Your hull becomes a physical outline: bigger drawings hit harder; low ones fit arches. Wheels change grip. Move the hammer and thruster. Both modes share a 100-point budget; overbuilding reduces impact.";
       this.panel.querySelector("[data-tool='cannon']")!.innerHTML = '<b aria-hidden="true">↗</b>Hammer mount';
       this.panel.querySelector("[data-tool='shield']")!.innerHTML = '<b aria-hidden="true">◈</b>Decoration';
@@ -204,6 +206,7 @@ export class Garage {
     if (part) { ctx.strokeStyle = "#d75c46"; ctx.lineWidth = 1; ctx.setLineDash([2, 2]); ctx.strokeRect(part.x - part.size - 4, part.y - part.size - 4, part.size * 2 + 8, part.size * 2 + 8); }
     ctx.restore();
     this.panel.querySelector("#garagePartCount")!.textContent = `${this.design.parts.length} PARTS · ${this.frameStrokes().length} STROKES`;
+    if(this.mode==="demolition"){const b=demolitionBlueprint(this.design);const text=`Hull ${Math.round(b.width)} × ${Math.round(b.height)} · Impact ${(b.massFactor*b.efficiency).toFixed(1)}× · Reach ${Math.round(b.reach)} · Build ${b.cost}/100${b.cost>100?' — over budget: reduced impact':''}`;const el=this.panel.querySelector("#garagePhysics")!;if(el.textContent!==text)el.textContent=text;this.panel.querySelector("#garagePartCount")!.textContent=`${this.design.parts.length} PARTS · ${b.cost}/100 BUILD`;}
   }
   private animate = (): void => {
     if (!this.open) return;

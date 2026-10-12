@@ -38,6 +38,11 @@ npm run dev
 npm test
 npm run build
 npm run playtest
+npm run review:demolition
 ```
 
 The development launcher normally starts client `http://localhost:5183` and server `http://localhost:2577`. Set `LOBBERS_BROWSER_PATH` to an installed Chromium executable for browser tests. Production builds to `dist/client`; the server serves it in production. Railway uses the existing `railway.json` build, start, and health checks.
+
+The repeatable demolition review uses fresh browser storage and actual inputs. It checks drawing proportions, garage pause and live stats, simultaneous race pause/resume, Shift chords, both player controls, victory and rematch. Each run saves desktop/phone screenshots, a pass/fail JSON report, and a Playwright trace under `artifacts/demolition-review/`. Set `LOBBERS_REVIEW_URL` to test another local preview, or `LOBBERS_REVIEW_OUTPUT` to select the evidence directory. Run the local server before this review.
+
+Races can be paused and resumed for both players from the duel header. Interrupted pointer holds cancel instead of swinging the hammer. Reinforced pieces show remaining resistance, and the garage reports hull size, impact, reach, and build budget while editing.
