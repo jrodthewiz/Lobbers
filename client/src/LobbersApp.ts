@@ -12,6 +12,8 @@ import { EMPTY_SNAPSHOT } from "./game/viewModel";
 import { Hud } from "./ui/Hud";
 import { ColyseusConnection, type RoomConnection } from "./network/RoomConnection";
 import { PeerHostRoom } from "./network/PeerHostRoom";
+import { waitForColyseusLaunch } from "./network/ColyseusLaunch";
+import { compatibleRoomServerOrigin } from "./staticFrontend";
 import { currentVehicle } from "./game/vehicleArt";
 
 type SchemaMapLike = {
@@ -40,7 +42,9 @@ const readBoolean = (source: unknown, key: string, fallback: boolean): boolean =
 const isSide = (value: string): value is Side => value === "blue" || value === "red";
 
 const resolveHttpBaseUrl = (): string => {
-  const explicit = import.meta.env.VITE_SERVER_URL;
+  const explicit = import.meta.env.VITE_STATIC_FRONTEND === "true"
+    ? compatibleRoomServerOrigin(import.meta.env.VITE_SERVER_URL)
+    : import.meta.env.VITE_SERVER_URL;
   if (typeof explicit === "string" && explicit.trim()) return explicit.replace(/\/$/, "");
   if (window.location.port === "5173") return "http://localhost:2567";
   return window.location.origin;
@@ -201,13 +205,13 @@ export class LobbersApp {
   }
 
   private async hostLobby(playerName: string): Promise<void> {
-    await this.connect(async () => new ColyseusConnection(await this.client.create(ROOM_NAME, {
+    await this.connectColyseus(async () => new ColyseusConnection(await this.client.create(ROOM_NAME, {
       hostName: playerName, playerName,
     })), "Hosting lobby...");
   }
 
   private async practiceBot(playerName: string): Promise<void> {
-    await this.connect(async () => new ColyseusConnection(await this.client.create(ROOM_NAME, {
+    await this.connectColyseus(async () => new ColyseusConnection(await this.client.create(ROOM_NAME, {
       hostName: playerName, playerName, bot: true,
     })), "Starting practice bot...");
   }
@@ -217,7 +221,7 @@ export class LobbersApp {
     if (!normalized) {
       this.audio.play("ui-error"); this.setStatus("Enter a lobby code."); return;
     }
-    await this.connect(async () => new ColyseusConnection(await this.client.join(ROOM_NAME, {
+    await this.connectColyseus(async () => new ColyseusConnection(await this.client.join(ROOM_NAME, {
       code: normalized, playerName,
     })), `Joining ${normalized}...`);
   }
@@ -236,6 +240,10 @@ export class LobbersApp {
     await this.connect((signal, generation) => PeerHostRoom.join(origin.trim(), normalized, playerName, {
       signal, status: message => { if (generation === this.connectionGeneration) this.setStatus(message); },
     }), `Joining peer ${normalized}...`);
+  }
+
+  private connectColyseus(action: () => Promise<RoomConnection>, status: string): Promise<void> {
+    return this.connect(signal => waitForColyseusLaunch(action(), signal), status);
   }
 
   private async connect(action: (signal: AbortSignal, generation: number) => Promise<RoomConnection>, status: string): Promise<void> {
@@ -350,7 +358,6 @@ export class LobbersApp {
   private throwRelease(aim: Vec2): void {
     if (!this.room) return;
     this.chargeStartedAtMs = null;
-    this.audio.playLayered(this.resolveThrowReleaseSounds(this.selectedAmmo));
     this.sendInput(CLIENT_MESSAGES.THROW_RELEASE, {
       aimX: aim.x,
       aimY: aim.y,
@@ -415,12 +422,21 @@ export class LobbersApp {
       if (
         previousThrowSeq !== undefined
         && player.throwSeq > previousThrowSeq
-        && player.sessionId !== this.room?.sessionId
       ) {
-        this.audio.playLayered([
-          { key: "throw-release", volumeScale: 0.78 },
-          { key: this.resolveAmmoSelectSound(player.selectedAmmo), delayMs: 28, volumeScale: 0.28 },
-        ]);
+        if (player.sessionId === this.room?.sessionId) {
+          // Confirm the accepted shot; depleted ammo may already have auto-selected a fallback.
+          const projectile = nextSnapshot.projectiles.find((shot) => (
+            shot.ownerSessionId === player.sessionId && !this.lastProjectilesById.has(shot.id)
+          ));
+          this.audio.playLayered(projectile
+            ? this.resolveThrowReleaseSounds(projectile.ammoType)
+            : [{ key: "throw-release" }]);
+        } else {
+          this.audio.playLayered([
+            { key: "throw-release", volumeScale: 0.78 },
+            { key: this.resolveAmmoSelectSound(player.selectedAmmo), delayMs: 28, volumeScale: 0.28 },
+          ]);
+        }
       }
 
       const previousHp = this.lastHpBySessionId.get(player.sessionId);

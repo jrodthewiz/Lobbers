@@ -6,6 +6,8 @@ import { currentVehicle, drawVehicleCanvas, drawEffectCanvas, garageDefault } fr
 import type { VehicleDesign } from "../../../shared/game/vehicleDesign";
 import { demolitionChallenge, completeDemolition, parseDemolitionProgress } from "../../../shared/game/demolitionChallenges";
 import { demolitionBlueprint } from "../../../shared/game/demolitionBlueprint";
+import { drawDemolitionPiece, drawDemolitionTargetBadge } from "./demolitionRender";
+import { HAMMER_ACCESSIBLE_LABEL, updateHammerCue } from "../ui/hammerCue";
 type Point = {
     x: number;
     y: number;
@@ -86,6 +88,7 @@ export class DemolitionGame {
     private audio = new GameAudio();
     private canvas!: HTMLCanvasElement;
     private ctx!: CanvasRenderingContext2D;
+    private hammerButton: HTMLButtonElement | null = null;
     private root!: HTMLElement;
     private garage!: Garage;
     private engine!: Engine;
@@ -128,7 +131,8 @@ export class DemolitionGame {
         this.root.className = "hud demo-ui";
         try{this.progress=parseDemolitionProgress(localStorage.getItem("lobbers-demolition-progress"));this.course=this.progress.unlocked;}catch{/* Optional saves. */}
         if(this.lane){this.course=this.requestedCourse;this.root.classList.add("demo-lane");}
-        this.root.innerHTML = `<header class="demo-top"><div class="demo-brand">LOBBERS.<small>DOODLE DEMOLITION DEPARTMENT</small></div><div class="demo-ticket"><strong id="demoMission"></strong><span id="demoObjective">Draw a machine. Make a beautiful mess.</span></div><div class="demo-tools"><select id="demoCourse" aria-label="Demolition challenge">${COURSES.map((c, i) => `<option value="${i}">${c.name}</option>`).join("")}</select><button id="openGarageButton">✎ Draw your machine</button><button id="demoRetry" aria-label="Retry challenge">↻ Retry</button></div></header><section class="demo-score" aria-label="Challenge progress"><div><strong id="demoTargets">0 / 3</strong><small>TARGETS TOPPLED</small></div><div><strong id="demoTime">60</strong><small>SECONDS OF BAD IDEAS</small></div><div><strong id="demoFuel">100%</strong><small>THRUSTER</small></div></section><div class="demo-hint" id="demoHint" role="status"></div><nav class="demo-controls" aria-label="Machine controls"><div><button data-hold="left" aria-label="Drive left">← A</button><button data-hold="right" aria-label="Drive right">D →</button><button data-tap="hop">↑ Hop</button></div><div><button data-hold="boost">» Boost</button><button data-tap="water">≈ Water</button><button data-hold="hammer" class="hammer">Hold → HAMMER</button></div></nav><section class="demo-results" id="demoResults" role="dialog" aria-label="Challenge results" hidden><small>OFFICIAL DAMAGE REPORT</small><h2 id="demoResultTitle"></h2><p id="demoResultText"></p><button id="demoAgain">↻ Another bad idea</button><button id="demoNext">Next playground →</button></section>`;
+        this.root.innerHTML = `<header class="demo-top"><div class="demo-brand">LOBBERS.<small>DOODLE DEMOLITION DEPARTMENT</small></div><div class="demo-ticket"><strong id="demoMission"></strong><span id="demoObjective">Draw a machine. Make a beautiful mess.</span></div><div class="demo-tools"><select id="demoCourse" aria-label="Demolition challenge">${COURSES.map((c, i) => `<option value="${i}">${c.name}</option>`).join("")}</select><button id="openGarageButton">✎ Draw your machine</button><button id="demoRetry" aria-label="Retry challenge">↻ Retry</button></div></header><section class="demo-score" aria-label="Challenge progress"><div><strong id="demoTargets">0 / 3</strong><small>TARGETS TOPPLED</small></div><div><strong id="demoTime">60</strong><small>SECONDS OF BAD IDEAS</small></div><div><strong id="demoFuel">100%</strong><small>THRUSTER</small></div></section><div class="demo-hint" id="demoHint" role="status"></div><nav class="demo-controls" aria-label="Machine controls"><div><button data-hold="left" aria-label="Drive left">← A</button><button data-hold="right" aria-label="Drive right">D →</button><button data-tap="hop">↑ Hop</button></div><div><button data-hold="boost">» Boost</button><button data-tap="water">≈ Water</button><button data-hold="hammer" class="hammer" aria-label="${HAMMER_ACCESSIBLE_LABEL}">Hold → HAMMER</button></div></nav><section class="demo-results" id="demoResults" role="dialog" aria-label="Challenge results" hidden><small>OFFICIAL DAMAGE REPORT</small><h2 id="demoResultTitle"></h2><p id="demoResultText"></p><button id="demoAgain">↻ Another bad idea</button><button id="demoNext">Next playground →</button></section>`;
+        this.hammerButton = this.root.querySelector<HTMLButtonElement>('[data-hold="hammer"]');
         this.canvas = document.createElement("canvas");
         this.canvas.className = "demolition-canvas";
         this.canvas.setAttribute("aria-label", "Paper demolition playground. Drive with A/D, hop with Space, hold J and release to swing, Shift boosts, W sprays water, R retries.");
@@ -204,8 +208,9 @@ export class DemolitionGame {
             this.charging = false;
             this.strike();
         }
+        updateHammerCue(this.hammerButton, this.charging, this.charge);
     } }
-    private release() { this.keys.clear(); this.charging = false; this.charge = 0; this.root.querySelectorAll<HTMLElement>("[data-held]").forEach(b => b.dataset.held = "false"); }
+    private release() { this.keys.clear(); this.charging = false; this.charge = 0; this.root.querySelectorAll<HTMLElement>("[data-held]").forEach(b => b.dataset.held = "false"); updateHammerCue(this.hammerButton, this.charging, this.charge); }
     private reset() {
         if (this.engine) {
             M.Composite.clear(this.engine.world, false);
@@ -423,7 +428,7 @@ export class DemolitionGame {
     } this.text("demoResultText", `${this.score} targets toppled · ${points.toLocaleString()} damage points · Best ${this.best.toLocaleString()}. ${won ? "Your invention passed inspection. Somehow." : "Move a wheel, charge a bigger swing, or break the tank. Try another idea."}`); this.root.querySelector<HTMLElement>("#demoResults")!.hidden = false; }
     private text(id: string, value: string) { const el = this.root.querySelector(`#${id}`)!; if (el.textContent !== value)
         el.textContent = value; }
-    private hud() { this.text("demoTargets", `${this.score} / ${this.challenge.goal}`); this.text("demoTime", String(Math.ceil(this.time))); this.text("demoFuel", `${Math.round(this.fuel)}%`); this.root.dataset.demoTargets = String(this.score); this.root.dataset.demoCompleted = String(this.completed);if(this.lane)parent.postMessage({type:"demo-state",round:this.duelRound,lane:this.lane,course:this.course,targets:this.score,goal:this.challenge.goal,time:this.time,completed:this.completed,garage:this.root.dataset.garageOpen==="true"},location.origin); }
+    private hud() { updateHammerCue(this.hammerButton, this.charging, this.charge); this.text("demoTargets", `${this.score} / ${this.challenge.goal}`); this.text("demoTime", String(Math.ceil(this.time))); this.text("demoFuel", `${Math.round(this.fuel)}%`); this.root.dataset.demoTargets = String(this.score); this.root.dataset.demoCompleted = String(this.completed);if(this.lane)parent.postMessage({type:"demo-state",round:this.duelRound,lane:this.lane,course:this.course,targets:this.score,goal:this.challenge.goal,time:this.time,completed:this.completed,garage:this.root.dataset.garageOpen==="true"},location.origin); }
     private frame(t: number) { const elapsed = Math.min(.08, (t - this.last) / 1000 || 0); this.last = t; if (!this.paused()) {
         this.accumulator += elapsed;
         let n = 0;
@@ -440,13 +445,14 @@ export class DemolitionGame {
         const phone = w <= 700;
         const scale = this.lane?Math.max(.4,Math.min(.65,(h-130)/450)):phone ? .65 : Math.max(.45, Math.min(w / 1440, h / 900));
         const vw = w / scale;
+        const groundScreenY = h - (this.lane ? 85 : phone ? 170 : 105);
         this.camera += (Math.max(0, Math.min(2200 - vw, this.chassis.position.x - vw * (phone ? .25 : .35))) - this.camera) * .08;
         ctx.setTransform(this.canvas.width / w, 0, 0, this.canvas.height / h, 0, 0);
         ctx.fillStyle = "#fff8e7";
         ctx.fillRect(0, 0, w, h);
         ctx.save();
         ctx.scale(scale, scale);
-        ctx.translate(-this.camera, (h - (this.lane?85:phone ? 170 : 105)) / scale - GROUND);
+        ctx.translate(-this.camera, groundScreenY / scale - GROUND);
         ctx.strokeStyle = "#263d380b";
         ctx.lineWidth = 1;
         for (let x = 0; x < 2400; x += 35) {
@@ -489,45 +495,7 @@ export class DemolitionGame {
             ctx.fillText(`${x / 10} m`, x, GROUND + 25);
         }
         for(const o of this.obstacles){ctx.fillStyle="#b98ac6";ctx.strokeStyle="#263d38";ctx.lineWidth=3;ctx.fillRect(o.body.position.x-o.w/2,o.body.position.y-o.h/2,o.w,o.h);ctx.strokeRect(o.body.position.x-o.w/2,o.body.position.y-o.h/2,o.w,o.h);ctx.fillStyle="#263d38";ctx.font="bold 12px Arial";ctx.textAlign="center";ctx.fillText("LOW CLEARANCE",o.body.position.x,o.body.position.y);}
-        for (const p of this.pieces) {
-            ctx.save();
-            ctx.translate(p.body.position.x, p.body.position.y);
-            ctx.rotate(p.body.angle);
-            ctx.fillStyle = p.hit ? "#f0c34b" : p.color;
-            ctx.strokeStyle = "#263d38";
-            ctx.lineWidth = 2.5;
-            ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
-            ctx.strokeRect(-p.w / 2, -p.h / 2, p.w, p.h);
-            if (p.kind === "tank") {
-                ctx.fillStyle = "#237f8780";
-                ctx.fillRect(-p.w / 2 + 5, 0, p.w - 10, p.h / 2 - 5);
-            }
-            else if (p.w > 80) {
-                for (let i = -1; i <= 1; i++) {
-                    ctx.fillStyle = "#fff8e7";
-                    ctx.fillRect(i * 35 - 9, -10, 18, 22);
-                    ctx.strokeRect(i * 35 - 9, -10, 18, 22);
-                }
-            }
-            if (p.target) {
-                ctx.fillStyle = p.hit ? "#fff8e7" : "#d75c46";
-                ctx.beginPath();
-                ctx.arc(0, -p.h / 2 - 18, 15, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.stroke();
-                ctx.fillStyle = p.hit ? "#263d38" : "#fff8e7";
-                ctx.font = "bold 17px Arial";
-                ctx.textAlign = "center";
-                ctx.fillText(p.hit ? "✓" : "★", 0, -p.h / 2 - 12);
-            }
-            if (p.label) {
-                ctx.fillStyle = "#263d38";
-                ctx.font = "bold 10px Arial";
-                ctx.textAlign = "center";
-                ctx.fillText(p.label, 0, 23);
-            }
-            ctx.restore();
-        }
+        for (const piece of this.pieces) drawDemolitionPiece(ctx, piece);
         ctx.fillStyle = "#237f87aa";
         for (const b of this.water) {
             ctx.beginPath();
@@ -598,5 +566,7 @@ export class DemolitionGame {
             ctx.restore();
         }
         ctx.restore();
+        const view = { scale, cameraX: this.camera, worldOriginY: groundScreenY - GROUND * scale };
+        for (const piece of this.pieces) drawDemolitionTargetBadge(ctx, piece, view);
     }
 }

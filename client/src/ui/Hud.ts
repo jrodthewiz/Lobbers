@@ -866,12 +866,14 @@ export class Hud {
 
   private setText(id: string, value: string): void {
     const element = this.byId(id);
-    if (element) element.textContent = value;
+    if (element && element.textContent !== value) element.textContent = value;
   }
 
   private setBar(id: string, percent: number): void {
     const element = this.byId<HTMLElement>(id);
-    if (element) element.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+    if (!element) return;
+    const width = `${Math.max(0, Math.min(100, percent))}%`;
+    if (element.style.width !== width) element.style.width = width;
   }
 
   private setPlayerCardState(id: string, state: HealthState): void {

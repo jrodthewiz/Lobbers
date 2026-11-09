@@ -30,6 +30,8 @@ Draw a Charged / End silhouette to morph your body during windup. Burst / Beginn
 
 The earlier networked artillery game and its room/peer transports remain accessible at `/?mode=artillery`; its match rules and blueprint replication are unchanged.
 
+In artillery mode, Host Lobby, Practice Bot, and Join By Code return to the menu with retry guidance if a connection has not completed within 15 seconds. Cancel connection returns immediately. You can start another attempt; a late result from an expired attempt cannot replace the newer match. Peer invitations retain their existing timing.
+
 ## Run and verify
 
 ```powershell
@@ -40,4 +42,17 @@ npm run build
 npm run playtest
 ```
 
-The development launcher normally starts client `http://localhost:5183` and server `http://localhost:2577`. Set `LOBBERS_BROWSER_PATH` to an installed Chromium executable for browser tests. Production builds to `dist/client`; the server serves it in production. Railway uses the existing `railway.json` build, start, and health checks.
+The development launcher normally starts client `http://localhost:5183` and server `http://localhost:2577`. Set `LOBBERS_BROWSER_PATH` to an installed Chromium executable for browser tests. Production builds to `dist/client`; the server serves it in production. Railway is deprecated. The existing `railway.json` is retained as legacy server configuration; the static frontend migration is documented below.
+
+
+## Static frontend migration to ChatGPT Sites
+
+The frontend can be built independently of the Node/Colyseus server:
+
+```sh
+VITE_STATIC_FRONTEND=true VITE_SERVER_URL= npm run build
+```
+
+Serve `dist/client` as a static Site. Doodle Demolition and same-device side-by-side 1v1 remain frontend modes. With no explicit valid HTTP(S) room-server origin, `?mode=artillery` shows a backend-required notice instead of attempting nonexistent same-origin Sites API/room endpoints. Normal non-static builds retain their existing behavior. A configured `VITE_SERVER_URL` only enables the existing client attempt; it does not verify backend reachability, compatible Colyseus/CORS, or peer invitation/signaling. The persistent Node room server and signaling service are separate migration work; Railway is deprecated, and no replacement backend is silently assumed.
+
+Save keys/formats are unchanged. Browser storage belongs to the page origin: a new private Sites origin cannot automatically read saves from the previous game origin. Keep the old origin's data; do not clear browser storage. This frontend migration performs no automatic save copy, import, merge, or deletion. A future approved same-origin/domain cutover or user-controlled transfer must be planned separately.
