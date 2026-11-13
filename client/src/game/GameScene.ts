@@ -1074,7 +1074,9 @@ export class GameScene extends Phaser.Scene {
     const color = wind > 0 ? COLORS.blueLight : COLORS.redLight;
     const alpha = 0.06 + (strength * 0.11);
     const stepY = 210;
-    const stepX = 520 - (strength * 70);
+    // Eight columns keep three wind rows within the 24-ribbon lane budget,
+    // even when stronger wind would otherwise shrink the spacing.
+    const stepX = Math.max(520 - (strength * 70), (WORLD.width - 370) / 8);
     const ribbonLength = 74 + (strength * 58);
     const topY = WORLD.groundY - 720;
     const bottomY = WORLD.groundY - 185;
@@ -1086,7 +1088,9 @@ export class GameScene extends Phaser.Scene {
         const rowPhase = (y * 0.007) + time;
         const rowRatio = clamp01((y - topY) / Math.max(1, bottomY - topY));
         const rowAlpha = alpha * (1 - (rowRatio * 0.36));
-        for (let x = laneLeft + 190; x < laneLeft + WORLD.width - 180; x += stepX) {
+        for (let column = 0; column < 8; column += 1) {
+          const x = laneLeft + 190 + column * stepX;
+          if (x >= laneLeft + WORLD.width - 180) break;
           const wave = Math.sin(rowPhase + (x * 0.004)) * (7 + (strength * 9));
           const scroll = ((performance.now() * 0.024 * direction) + (y * 0.31)) % stepX;
           const startX = x + scroll;

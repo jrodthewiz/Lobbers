@@ -40,6 +40,7 @@ npm run dev
 npm test
 npm run build
 npm run playtest
+npm run review:demolition
 ```
 
 The development launcher normally starts client `http://localhost:5183` and server `http://localhost:2577`. Set `LOBBERS_BROWSER_PATH` to an installed Chromium executable for browser tests. Production builds to `dist/client`; the server serves it in production. Railway is deprecated. The existing `railway.json` is retained as legacy server configuration; the static frontend migration is documented below.
@@ -56,3 +57,7 @@ VITE_STATIC_FRONTEND=true VITE_SERVER_URL= npm run build
 Serve `dist/client` as a static Site. Doodle Demolition and same-device side-by-side 1v1 remain frontend modes. With no explicit valid HTTP(S) room-server origin, `?mode=artillery` shows a backend-required notice instead of attempting nonexistent same-origin Sites API/room endpoints. Normal non-static builds retain their existing behavior. A configured `VITE_SERVER_URL` only enables the existing client attempt; it does not verify backend reachability, compatible Colyseus/CORS, or peer invitation/signaling. The persistent Node room server and signaling service are separate migration work; Railway is deprecated, and no replacement backend is silently assumed.
 
 Save keys/formats are unchanged. Browser storage belongs to the page origin: a new private Sites origin cannot automatically read saves from the previous game origin. Keep the old origin's data; do not clear browser storage. This frontend migration performs no automatic save copy, import, merge, or deletion. A future approved same-origin/domain cutover or user-controlled transfer must be planned separately.
+
+The repeatable demolition review uses fresh browser storage and actual inputs. It checks drawing proportions, garage pause and live stats, simultaneous race pause/resume, Shift chords, both player controls, victory and rematch. Each run saves desktop/phone screenshots, a pass/fail JSON report, and a Playwright trace under `artifacts/demolition-review/`. Set `LOBBERS_REVIEW_URL` to test another local preview, or `LOBBERS_REVIEW_OUTPUT` to select the evidence directory. Run the local server before this review.
+
+Races can be paused and resumed for both players from the duel header. Interrupted pointer holds cancel instead of swinging the hammer. Reinforced pieces show remaining resistance, and the garage reports hull size, impact, reach, and build budget while editing.

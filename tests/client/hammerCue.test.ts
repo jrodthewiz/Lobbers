@@ -115,13 +115,13 @@ describe("existing Hammer button charge cue", () => {
     expect(saved.get("unrelated-save")).toBe("keep");
   });
 
-  it("shares touch-held state and preserves existing pointercancel/lost-capture release semantics", () => {
+  it("shares touch-held state and cancels interrupted pointer holds without swinging", () => {
     const { game, hammer } = setup();
     hammer.emit("pointerdown", { pointerId: 7 });
     expect(hammer.setPointerCapture).toHaveBeenCalledWith(7);
     expect(hammer.textContent).toBe("Release 0%"); ticks(game); charged(game, hammer);
     hammer.emit("pointercancel");
-    expect(game.charge).toBe(0); expect(game.swing).toBe(1); idle(hammer);
+    expect(game.charge).toBe(0); expect(game.swing).toBe(0); idle(hammer);
     hammer.emit("lostpointercapture"); idle(hammer);
     expect(hammer.dataset.held).toBe("false");
   });

@@ -8,6 +8,8 @@ export type DemolitionPieceAppearance = {
   target: boolean;
   hit: boolean;
   label: string | undefined;
+  toughness?: number;
+  toughnessMax?: number;
 };
 export type DemolitionView = { scale: number; cameraX: number; worldOriginY: number };
 const INK = "#263d38";
@@ -61,6 +63,13 @@ export const drawDemolitionPiece = (ctx: CanvasRenderingContext2D, piece: Demoli
         ctx.fillRect(i * 35 - 9, -10, 18, 22);
         ctx.strokeRect(i * 35 - 9, -10, 18, 22);
       }
+    }
+    if ((piece.toughnessMax ?? 0) > 0 && (piece.toughness ?? 0) > 0) {
+      ctx.fillStyle = INK;
+      ctx.fillRect(-piece.w / 2 + 3, -piece.h / 2 + 3, Math.max(0, piece.w - 6), 5);
+      ctx.fillStyle = "#b98ac6";
+      const ratio = Math.max(0, Math.min(1, piece.toughness! / piece.toughnessMax!));
+      ctx.fillRect(-piece.w / 2 + 4, -piece.h / 2 + 4, Math.max(0, piece.w - 8) * ratio, 3);
     }
     if (piece.label) {
       ctx.fillStyle = INK; ctx.font = "bold 10px Arial"; ctx.textAlign = "center";

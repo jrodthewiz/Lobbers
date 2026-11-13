@@ -200,7 +200,20 @@ export class LobbersApp {
       props: this.snapshot.worldProps.filter(p => p.active).map(({ type, x, y, width, height, hp }) => ({ type, x, y, width, height, hp })),
       winner: this.snapshot.winnerSide,
     });
-    void this.refreshLobbies();
+    void this.refreshLobbies().then(() => {
+      const params = new URLSearchParams(window.location.search);
+      const targetCode = (params.get('room') || params.get('joinId') || params.get('code') || '').trim().toUpperCase();
+      const shouldQuickJoin = params.get('quickJoin') === '1' || params.get('autoJoin') === '1' || Boolean(targetCode);
+      if (shouldQuickJoin) {
+        const guestName = (params.get('name') || params.get('playerName') || "Viewer").slice(0, 15);
+        if (targetCode) {
+          void this.joinLobby(targetCode, guestName);
+        } else {
+          const firstLobby = this.lobbies[0];
+          if (firstLobby) void this.joinLobby(firstLobby.code, guestName);
+        }
+      }
+    });
     window.setInterval(() => this.render(), 100);
   }
 

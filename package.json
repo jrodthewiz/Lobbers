@@ -19,7 +19,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "playtest": "playwright test"
+    "playtest": "playwright test",
+    "review:demolition": "node scripts/review-demolition.mjs"
   },
   "dependencies": {
     "@colyseus/schema": "^3.0.0",
